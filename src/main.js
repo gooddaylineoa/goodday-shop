@@ -65,8 +65,10 @@ onAuthStateChanged(auth, async (user) => {
 
     showView('home-view');
     await loadLikedProducts();
+    await loadFollowedShops();
     await loadProducts();
     await updateCartBadge();
+    await updateNotifBadge();
   } else {
     currentUid = null;
     try {
@@ -1078,3 +1080,171 @@ document.getElementById('btn-order-buy-again').onclick = async () => {
     hideLoading();
   }
 };
+
+// ================= ติดตามร้านค้า + สินค้าแนะนำ =================
+
+let followedShopIds = new Set();
+let currentShopIdViewing = null;
+
+async function loadFollowedShops() {
+  const snap = await getDocs(collection(db, 'users', currentUid, 'followedShops'));
+  followedShopIds = new Set();
+  snap.forEach(d => followedShopIds.add(d.id));
+}
+
+function updateFollowButton(shopId) {
+  const btn = document.getElementById('btn-follow-shop');
+  const isFollowed = followedShopIds.has(shopId);
+  if (isFollowed) {
+    btn.innerText = '✓ กำลังติดตาม';
+    btn.className = 'w-full bg-gray-100 text-gray-600 py-2.5 rounded-xl font-black text-base';
+  } else {
+    btn.innerText = '+ ติดตาม';
+    btn.className = 'w-full border-2 border-pink-500 theme-text py-2.5 rounded-xl font-black text-base';
+  }
+}
+
+document.getElementById('btn-follow-shop').onclick = async () => {
+  const shopId = currentShopIdViewing;
+  const isFollowed = followedShopIds.has(shopId);
+  const shopRef = doc(db, 'shops', shopId);
+
+  showLoading(isFollowed ? 'กำลังเลิกติดตาม...' : 'กำลังติดตาม...');
+  try {
+    if (isFollowed) {
+      await deleteDoc(doc(db, 'users', currentUid, 'followedShops', shopId));
+      await updateDoc(shopRef, { followerCount: increment(-1) });
+      followedShopIds.delete(shopId);
+    } else {
+      await setDoc(doc(db, 'users', currentUid, 'followedShops', shopId), { followedAt: serverTimestamp() });
+      await updateDoc(shopRef, { followerCount: increment(1) });
+      followedShopIds.add(shopId);
+    }
+    allShopsData[shopId].followerCount = (allShopsData[shopId].followerCount || 0) + (isFollowed ? -1 : 1);
+    document.getElementById('shop-followers').innerText = allShopsData[shopId].followerCount;
+    updateFollowButton(shopId);
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+  } finally {
+    hideLoading();
+  }
+};
+
+// แก้ openShopPage เดิม เพิ่มส่วนสินค้าแนะนำ + ปุ่มติดตาม
+const originalOpenShopPage = openShopPage;
+window.openShopPage = function(shopId) {
+  currentShopIdViewing = shopId;
+  originalOpenShopPage(shopId);
+  updateFollowButton(shopId);
+
+  const shopProducts = allProductsData.filter(p => p.shopId === shopId);
+  const featured = shopProducts.filter(p => p.isFeatured);
+  const featuredSection = document.getElementById('shop-featured-section');
+
+  if (featured.length > 0) {
+    featuredSection.classList.remove('hidden');
+    document.getElementById('shop-featured-grid').innerHTML = featured.map(p => `
+      <div class="min-w-[160px] w-[160px] bg-white rounded-2xl shadow-sm border-2 border-amber-200 overflow-hidden shrink-0 cursor-pointer" onclick="openProductDetail('${p.id}')">
+        <div class="w-full aspect-square bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center text-3xl text-amber-300 relative">
+          <i class="fa-solid fa-box-open"></i>
+          <span class="absolute top-2 left-2 bg-amber-400 text-white text-xs font-black px-2 py-0.5 rounded-full">แนะนำ</span>
+        </div>
+        <div class="p-3">
+          <h4 class="font-bold text-gray-800 text-sm leading-tight mb-1 line-clamp-2">${p.name}</h4>
+          <p class="text-base font-black theme-text">฿${(p.price || 0).toLocaleString()}</p>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    featuredSection.classList.add('hidden');
+  }
+};
+
+// ================= ระบบแจ้งเตือน (กระดิ่ง) =================
+
+document.getElementById('btn-notif-bell').onclick = () => { showView('notif-panel-view'); loadNotifications(); };
+document.getElementById('btn-back-notif').onclick = () => showView('home-view');
+
+async function loadNotifications() {
+  const container = document.getElementById('notif-list-container');
+  container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">กำลังโหลด...</p>';
+
+  const q = query(collection(db, 'users', currentUid, 'notifications'), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+
+  if (snap.empty) {
+    container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">ยังไม่มีการแจ้งเตือน</p>';
+    return;
+  }
+
+  const notifIcons = {
+    order_status: { icon: 'fa-box', color: 'text-blue-500 bg-blue-50' },
+    new_shop: { icon: 'fa-shop', color: 'text-emerald-500 bg-emerald-50' },
+    news: { icon: 'fa-bullhorn', color: 'text-amber-500 bg-amber-50' },
+    new_product: { icon: 'fa-tag', color: 'text-pink-500 bg-pink-50' }
+  };
+
+  const notifs = [];
+  snap.forEach(d => notifs.push({ id: d.id, ...d.data() }));
+
+  container.innerHTML = notifs.map(n => {
+    const style = notifIcons[n.type] || notifIcons.news;
+    return `
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-start gap-3 cursor-pointer ${n.read ? 'opacity-60' : ''}" onclick="handleNotifClick('${n.id}', '${n.type}', '${n.linkId || ''}')">
+        <div class="w-11 h-11 ${style.color} rounded-full flex items-center justify-center text-lg shrink-0"><i class="fa-solid ${style.icon}"></i></div>
+        <div class="flex-1">
+          <p class="font-bold text-gray-800 text-base">${n.title}</p>
+          <p class="text-sm text-gray-500">${n.message}</p>
+        </div>
+        ${!n.read ? '<span class="w-2.5 h-2.5 bg-rose-500 rounded-full mt-2 shrink-0"></span>' : ''}
+      </div>`;
+  }).join('');
+}
+
+async function handleNotifClick(notifId, type, linkId) {
+  await updateDoc(doc(db, 'users', currentUid, 'notifications', notifId), { read: true });
+
+  if (type === 'order_status') {
+    showView('order-status-view');
+    await loadMyOrders();
+  } else if (type === 'new_shop' || type === 'new_product') {
+    await openShopPage(linkId);
+  } else if (type === 'news') {
+    const notifDoc = await getDoc(doc(db, 'users', currentUid, 'notifications', notifId));
+    const n = notifDoc.data();
+    document.getElementById('news-modal-title').innerText = n.title;
+    document.getElementById('news-modal-message').innerText = n.fullMessage || n.message;
+    const modal = document.getElementById('news-modal');
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+  }
+
+  loadNotifications();
+}
+window.handleNotifClick = handleNotifClick;
+
+document.getElementById('btn-close-news-modal').onclick = () => {
+  const modal = document.getElementById('news-modal');
+  modal.classList.add('hidden'); modal.classList.remove('flex');
+};
+
+async function updateNotifBadge() {
+  const q = query(collection(db, 'users', currentUid, 'notifications'));
+  const snap = await getDocs(q);
+  let unreadCount = 0;
+  snap.forEach(d => { if (!d.data().read) unreadCount++; });
+
+  const bellBtn = document.getElementById('btn-notif-bell');
+  let badge = document.getElementById('notif-badge');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.id = 'notif-badge';
+    badge.className = 'absolute -top-1 -right-1 bg-amber-400 text-gray-900 text-xs font-black w-5 h-5 rounded-full flex items-center justify-center';
+    bellBtn.appendChild(badge);
+  }
+  if (unreadCount > 0) {
+    badge.innerText = unreadCount;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
