@@ -392,3 +392,224 @@ async function loadLikedProducts() {
   productLikedIds = new Set();
   snap.forEach(d => productLikedIds.add(d.id));
 }
+
+// ================= ตะกร้า + Checkout =================
+
+let allCartItems = [];
+let selectedCartItemIds = new Set();
+let currentDeliveryMethod = 'delivery';
+let userAddresses = [];
+let availableCoupons = 0;
+
+document.getElementById('tab-cart').onclick = () => { showView('cart-view'); loadCart(); };
+document.getElementById('btn-back-cart').onclick = () => showView('home-view');
+
+async function loadCart() {
+  const container = document.getElementById('cart-list-container');
+  container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">กำลังโหลด...</p>';
+
+  const snap = await getDocs(collection(db, 'users', currentUid, 'cart'));
+  allCartItems = [];
+  snap.forEach(d => allCartItems.push({ id: d.id, ...d.data() }));
+
+  selectedCartItemIds = new Set();
+
+  if (allCartItems.length === 0) {
+    container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">ตะกร้าว่างเปล่า</p>';
+    updateCartSummary();
+    return;
+  }
+
+  container.innerHTML = allCartItems.map(item => {
+    const shop = allShopsData[item.shopId] || {};
+    return `
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 flex items-center gap-3">
+        <input type="checkbox" class="cart-item-checkbox w-6 h-6" data-item-id="${item.id}">
+        <div class="w-16 h-16 bg-gradient-to-br from-pink-50 to-rose-100 rounded-xl flex items-center justify-center text-2xl text-pink-300 shrink-0">
+          <i class="fa-solid fa-box-open"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h4 class="font-bold text-gray-800 text-base leading-tight truncate">${item.name}</h4>
+          ${item.variant ? `<p class="text-sm text-gray-400">ตัวเลือก: ${item.variant}</p>` : ''}
+          <p class="text-sm text-gray-400"><i class="fa-solid fa-shop mr-1"></i>${shop.name || 'ร้านค้า'}</p>
+          <div class="flex justify-between items-center mt-1">
+            <p class="text-lg font-black theme-text">฿${(item.price * item.qty).toLocaleString()}</p>
+            <p class="text-sm text-gray-400">x${item.qty}</p>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  document.querySelectorAll('.cart-item-checkbox').forEach(cb => {
+    cb.onchange = () => {
+      if (cb.checked) selectedCartItemIds.add(cb.dataset.itemId);
+      else selectedCartItemIds.delete(cb.dataset.itemId);
+      updateCartSummary();
+    };
+  });
+
+  updateCartSummary();
+}
+
+function updateCartSummary() {
+  const selectedItems = allCartItems.filter(item => selectedCartItemIds.has(item.id));
+  const total = selectedItems.reduce((sum, item) => sum + item.price * item.qty, 0);
+
+  document.getElementById('cart-total').innerText = `฿${total.toLocaleString()}`;
+
+  const btn = document.getElementById('btn-go-checkout');
+  if (selectedItems.length > 0) {
+    btn.disabled = false;
+    btn.className = 'w-full theme-pink text-white py-4 rounded-2xl font-black text-lg';
+    btn.innerText = `ไปหน้าชำระเงิน (${selectedItems.length} ชิ้น)`;
+  } else {
+    btn.disabled = true;
+    btn.className = 'w-full bg-gray-300 text-white py-4 rounded-2xl font-black text-lg';
+    btn.innerText = 'เลือกสินค้าที่ต้องการซื้อ';
+  }
+}
+
+document.getElementById('btn-go-checkout').onclick = async () => {
+  await openCheckout();
+};
+
+async function openCheckout() {
+  const selectedItems = allCartItems.filter(item => selectedCartItemIds.has(item.id));
+
+  document.getElementById('checkout-items-list').innerHTML = selectedItems.map(item => `
+    <div class="flex justify-between text-base">
+      <span class="text-gray-600">${item.name} ${item.variant ? `(${item.variant})` : ''} x${item.qty}</span>
+      <span class="font-bold text-gray-800">฿${(item.price * item.qty).toLocaleString()}</span>
+    </div>
+  `).join('');
+
+  // โหลดที่อยู่
+  const addrSnap = await getDocs(collection(db, 'users', currentUid, 'addresses'));
+  userAddresses = [];
+  addrSnap.forEach(d => userAddresses.push({ id: d.id, ...d.data() }));
+  renderAddressSelector();
+
+  // เช็คสิทธิ์คูปองคงเหลือ
+  const userSnap = await getDoc(doc(db, 'users', currentUid));
+  const userData = userSnap.data();
+  const wasteLogsSnap = await getDocs(collection(db, 'users', currentUid, 'wasteLogs'));
+  let totalWaste = 0;
+  wasteLogsSnap.forEach(d => totalWaste += d.data().amount || 0);
+  const totalCoupons = Math.floor(totalWaste / 100);
+  const usedCoupons = userData.wasteCouponsRedeemed || 0;
+  availableCoupons = Math.max(totalCoupons - usedCoupons, 0);
+
+  const couponSection = document.getElementById('coupon-section');
+  if (availableCoupons > 0) {
+    couponSection.classList.remove('hidden');
+    document.getElementById('coupon-available-count').innerText = availableCoupons;
+    document.getElementById('checkout-use-coupon').checked = false;
+  } else {
+    couponSection.classList.add('hidden');
+  }
+
+  currentDeliveryMethod = 'delivery';
+  setDeliveryMode('delivery');
+  recalcCheckoutTotal();
+
+  showView('checkout-view');
+}
+
+document.getElementById('btn-back-checkout').onclick = () => showView('cart-view');
+
+function renderAddressSelector() {
+  const container = document.getElementById('checkout-address-select-container');
+  if (userAddresses.length === 0) {
+    container.innerHTML = '<p class="text-base text-red-500 font-bold">ไม่มีที่อยู่ กรุณาเพิ่มที่อยู่ก่อน</p>';
+    return;
+  }
+  container.innerHTML = userAddresses.map((a, i) => `
+    <label class="flex items-start gap-2 bg-gray-50 rounded-xl p-3 mb-2 cursor-pointer">
+      <input type="radio" name="checkout-address" value="${a.id}" ${i === 0 ? 'checked' : ''} class="w-5 h-5 mt-1">
+      <div class="text-base">
+        <p class="font-bold text-gray-800">${a.recipient} · ${a.phone}</p>
+        <p class="text-gray-500">${a.detail} ${a.subdist} ${a.dist} ${a.prov} ${a.zip}</p>
+      </div>
+    </label>
+  `).join('');
+}
+
+function setDeliveryMode(mode) {
+  currentDeliveryMethod = mode;
+  const deliveryBtn = document.getElementById('btn-delivery-mode');
+  const pickupBtn = document.getElementById('btn-pickup-mode');
+  const addrBox = document.getElementById('checkout-address-box');
+
+  if (mode === 'delivery') {
+    deliveryBtn.className = 'py-3.5 rounded-xl font-black text-base border-2 theme-pink text-white border-transparent';
+    pickupBtn.className = 'py-3.5 rounded-xl font-black text-base border-2 bg-gray-50 text-gray-600 border-gray-200';
+    addrBox.classList.remove('hidden');
+  } else {
+    pickupBtn.className = 'py-3.5 rounded-xl font-black text-base border-2 theme-pink text-white border-transparent';
+    deliveryBtn.className = 'py-3.5 rounded-xl font-black text-base border-2 bg-gray-50 text-gray-600 border-gray-200';
+    addrBox.classList.add('hidden');
+  }
+  recalcCheckoutTotal();
+}
+document.getElementById('btn-delivery-mode').onclick = () => setDeliveryMode('delivery');
+document.getElementById('btn-pickup-mode').onclick = () => setDeliveryMode('pickup');
+document.getElementById('checkout-use-coupon').onchange = () => recalcCheckoutTotal();
+
+function recalcCheckoutTotal() {
+  const selectedItems = allCartItems.filter(item => selectedCartItemIds.has(item.id));
+  const itemsTotal = selectedItems.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const deliveryFee = currentDeliveryMethod === 'delivery' ? 50 : 0;
+  const useCoupon = document.getElementById('checkout-use-coupon').checked;
+  const discount = useCoupon ? 10 : 0;
+  const grandTotal = Math.max(itemsTotal + deliveryFee - discount, 0);
+
+  document.getElementById('ck-items-total').innerText = `฿${itemsTotal.toLocaleString()}`;
+  document.getElementById('ck-delivery-fee').innerText = `฿${deliveryFee.toLocaleString()}`;
+  document.getElementById('ck-discount-row').classList.toggle('hidden', discount === 0);
+  document.getElementById('ck-discount').innerText = `-฿${discount.toLocaleString()}`;
+  document.getElementById('ck-grand-total').innerText = `฿${grandTotal.toLocaleString()}`;
+}
+
+document.getElementById('btn-confirm-order').onclick = async () => {
+  if (currentDeliveryMethod === 'delivery' && userAddresses.length === 0) {
+    showToast('กรุณาเพิ่มที่อยู่ก่อนสั่งซื้อ', 'error');
+    return;
+  }
+
+  const addressId = currentDeliveryMethod === 'delivery'
+    ? document.querySelector('input[name="checkout-address"]:checked')?.value
+    : null;
+
+  const useCoupon = document.getElementById('checkout-use-coupon').checked;
+
+  showLoading('กำลังสร้างคำสั่งซื้อ...');
+  try {
+    const res = await fetch('/api/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uid: currentUid,
+        cartItemIds: Array.from(selectedCartItemIds),
+        deliveryMethod: currentDeliveryMethod,
+        addressId,
+        useCoupon
+      })
+    });
+    const data = await res.json();
+    hideLoading();
+
+    if (!res.ok) {
+      showToast(data.error || 'สั่งซื้อไม่สำเร็จ', 'error');
+      return;
+    }
+
+    showToast('สร้างคำสั่งซื้อสำเร็จ! กำลังไปหน้าชำระเงิน', 'success');
+    showView('home-view');
+    await loadProducts();
+    await updateCartBadge();
+    // 🔜 เฟส 4 จะพาไปหน้าชำระเงิน (QR+สลิป) จริงตรงนี้แทน
+  } catch (err) {
+    hideLoading();
+    showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
+  }
+};
