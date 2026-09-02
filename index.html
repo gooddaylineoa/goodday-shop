@@ -268,6 +268,185 @@
       </div>
     </div>
 
+    <!-- หน้าชำระเงิน (แยกจากแถบล่าง) -->
+    <div id="payment-view" class="page-section bg-gray-50 min-h-screen pb-10">
+      <div class="theme-pink text-white p-4 flex items-center gap-3 sticky top-0 z-40">
+        <button id="btn-leave-payment" class="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center text-lg"><i class="fa-solid fa-xmark"></i></button>
+        <h2 class="text-xl font-bold">ชำระเงินค่าสินค้า</h2>
+      </div>
+
+      <div class="p-4">
+        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 text-center">
+          <p class="text-base font-bold text-amber-700"><i class="fa-solid fa-clock mr-1"></i>กรุณาอัปโหลดสลิปภายใน</p>
+          <p id="payment-countdown" class="text-2xl font-black text-amber-800 mt-1">24:00:00</p>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-md border border-gray-100 p-6 text-center mb-4">
+          <p class="text-lg font-bold text-gray-600 mb-1">ยอดที่ต้องชำระ</p>
+          <p id="payment-amount" class="text-4xl font-black theme-text mb-4">฿0</p>
+          <img id="payment-qr-img" src="" class="w-56 h-56 mx-auto mb-3">
+          <button id="btn-download-qr" class="text-base font-bold theme-text underline">
+            <i class="fa-solid fa-download mr-1"></i>ดาวน์โหลด QR
+          </button>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+          <p class="text-base text-gray-400 font-bold mb-1">หรือโอนผ่านบัญชีธนาคาร</p>
+          <p id="payment-bank-name" class="text-lg font-black text-gray-800">-</p>
+          <p id="payment-account-number" class="text-2xl font-black theme-text tracking-wider my-1">-</p>
+          <p id="payment-account-name" class="text-base text-gray-500">-</p>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <p class="text-lg font-black text-gray-800 mb-3">แนบสลิปการโอนเงิน</p>
+          <div id="slip-preview-box" class="w-full h-44 bg-pink-50/50 rounded-2xl border-2 border-dashed border-pink-200 flex items-center justify-center overflow-hidden cursor-pointer mb-3">
+            <div id="slip-placeholder" class="text-center text-gray-400">
+              <i class="fa-solid fa-receipt text-4xl mb-2 text-pink-300"></i>
+              <p class="text-base font-bold">กดเพื่อแนบภาพสลิป</p>
+            </div>
+            <img id="slip-preview" class="hidden w-full h-full object-contain">
+          </div>
+          <input type="file" id="slip-input" accept="image/*" class="hidden">
+          <button id="btn-submit-slip" class="w-full theme-pink text-white py-4 rounded-2xl font-black text-lg">ยืนยันการชำระเงิน</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- สถานะรอ (แบบช้อปปี้) -->
+    <div id="order-pending-view" class="page-section bg-gray-50 min-h-screen flex flex-col items-center justify-center p-6 text-center">
+      <div class="w-24 h-24 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center text-5xl mb-6">
+        <i class="fa-solid fa-hourglass-half"></i>
+      </div>
+      <h2 id="pending-title" class="text-2xl font-black text-gray-800 mb-2">รอการชำระเงิน</h2>
+      <p id="pending-message" class="text-gray-500 text-lg mb-8">กรุณาชำระเงินภายในเวลาที่กำหนด</p>
+      <div class="w-full max-w-xs space-y-3">
+        <button id="btn-pending-go-status" class="w-full theme-pink text-white py-4 rounded-2xl font-black text-lg">ไปดูสถานะคำสั่งซื้อ</button>
+        <button id="btn-pending-go-home" class="w-full bg-white border-2 border-gray-200 text-gray-600 py-4 rounded-2xl font-black text-lg">กลับหน้าหลัก</button>
+      </div>
+    </div>
+
+    <!-- บัญชีของฉัน -->
+<div id="account-view" class="page-section bg-gray-50 min-h-screen pb-24">
+  <div class="theme-pink text-white p-4 sticky top-0 z-40">
+    <h2 class="text-xl font-black">บัญชีของฉัน</h2>
+  </div>
+  <div class="p-4">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4 flex items-center gap-4">
+      <div class="w-16 h-16 rounded-full bg-pink-100 flex items-center justify-center text-2xl theme-text shrink-0">
+        <i class="fa-solid fa-user"></i>
+      </div>
+      <div class="flex-1">
+        <h3 id="acc-name" class="text-xl font-black text-gray-800">-</h3>
+        <p id="acc-memberid" class="text-base text-gray-400">GD-XXXXX</p>
+      </div>
+    </div>
+
+    <div onclick="openOrderStatus()" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-3 flex items-center gap-3 cursor-pointer">
+      <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-xl text-blue-500"><i class="fa-solid fa-box"></i></div>
+      <p class="flex-1 font-black text-gray-800 text-lg">ติดตามสถานะสินค้า</p>
+      <i class="fa-solid fa-chevron-right text-gray-300"></i>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div onclick="showToast('ร้านค้าที่ติดตาม จะทำในเฟสถัดไป', 'info')" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-center cursor-pointer">
+        <i class="fa-solid fa-shop text-2xl text-pink-400 mb-2"></i>
+        <p class="font-bold text-gray-700 text-base">ร้านค้าที่ติดตาม</p>
+      </div>
+      <div onclick="openLikedProductsView()" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-center cursor-pointer">
+        <i class="fa-solid fa-heart text-2xl text-rose-400 mb-2"></i>
+        <p class="font-bold text-gray-700 text-base">สินค้าที่ถูกใจ</p>
+      </div>
+    </div>
+
+    <h3 class="text-lg font-black text-gray-800 mb-2">ที่อยู่ของฉัน</h3>
+    <div id="acc-address-list" class="space-y-2 mb-4"></div>
+
+    <div onclick="showToast('ศูนย์ช่วยเหลือ จะทำแยกอีกระบบ', 'info')" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center gap-3 cursor-pointer">
+      <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-xl text-gray-500"><i class="fa-solid fa-circle-question"></i></div>
+      <p class="flex-1 font-black text-gray-800 text-lg">ศูนย์ช่วยเหลือ</p>
+      <i class="fa-solid fa-chevron-right text-gray-300"></i>
+    </div>
+  </div>
+
+  <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-200 flex z-50">
+    <button id="acc-tab-home" class="flex-1 py-3 flex flex-col items-center gap-1 text-gray-400">
+      <i class="fa-solid fa-store text-xl"></i><span class="text-sm font-bold">สินค้าทั้งหมด</span>
+    </button>
+    <button id="acc-tab-cart" class="flex-1 py-3 flex flex-col items-center gap-1 text-gray-400">
+      <i class="fa-solid fa-cart-shopping text-xl"></i><span class="text-sm font-bold">ตะกร้า</span>
+    </button>
+    <button id="acc-tab-account" class="flex-1 py-3 flex flex-col items-center gap-1 theme-text">
+      <i class="fa-solid fa-user text-xl"></i><span class="text-sm font-bold">บัญชีของฉัน</span>
+    </button>
+  </div>
+</div>
+
+<!-- ติดตามสถานะสินค้า (5 แถบ) -->
+<div id="order-status-view" class="page-section bg-gray-50 min-h-screen pb-10">
+  <div class="theme-pink text-white p-4 flex items-center gap-3 sticky top-0 z-40">
+    <button id="btn-back-order-status" class="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center text-lg"><i class="fa-solid fa-arrow-left"></i></button>
+    <h2 class="text-xl font-bold">คำสั่งซื้อของฉัน</h2>
+  </div>
+  <div class="flex overflow-x-auto bg-white border-b border-gray-200 sticky top-[72px] z-30">
+    <button data-tab="pending_payment" class="order-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 theme-text border-b-2 border-pink-500">รอชำระเงิน</button>
+    <button data-tab="preparing" class="order-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 text-gray-400 border-b-2 border-transparent">กำลังจัดส่ง</button>
+    <button data-tab="shipping" class="order-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 text-gray-400 border-b-2 border-transparent">อยู่ระหว่างจัดส่ง</button>
+    <button data-tab="completed" class="order-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 text-gray-400 border-b-2 border-transparent">เสร็จสิ้น</button>
+    <button data-tab="to_rate" class="order-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 text-gray-400 border-b-2 border-transparent">ให้คะแนน</button>
+  </div>
+  <div class="p-4">
+    <div id="order-status-list" class="space-y-3"></div>
+  </div>
+</div>
+
+  <!-- รายละเอียดคำสั่งซื้อ -->
+  <div id="order-detail-view" class="page-section bg-white min-h-screen pb-10">
+    <div class="theme-pink text-white p-4 flex items-center gap-3 sticky top-0 z-40">
+      <button id="btn-back-order-detail" class="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center text-lg"><i class="fa-solid fa-arrow-left"></i></button>
+      <h2 class="text-xl font-bold">รายละเอียดคำสั่งซื้อ</h2>
+    </div>
+    <div class="p-4">
+      <span id="od-status-badge" class="inline-block text-base font-bold px-3 py-1.5 rounded-full mb-3"></span>
+      <div id="od-items-list" class="bg-gray-50 rounded-2xl p-4 mb-4 space-y-2"></div>
+      <div class="bg-gray-50 rounded-2xl p-4 mb-4 space-y-1">
+        <div class="flex justify-between text-base text-gray-500"><span>ค่าสินค้า</span><span id="od-items-total">฿0</span></div>
+        <div class="flex justify-between text-base text-gray-500"><span>ค่าจัดส่ง</span><span id="od-delivery-fee">฿0</span></div>
+        <div id="od-discount-row" class="hidden flex justify-between text-base text-emerald-600"><span>ส่วนลดคูปอง</span><span id="od-discount">-฿0</span></div>
+        <div class="border-t border-gray-200 mt-2 pt-2 flex justify-between text-xl font-black text-gray-800"><span>ยอดรวม</span><span id="od-grand-total" class="theme-text">฿0</span></div>
+      </div>
+
+      <button id="btn-order-go-pay" class="hidden w-full theme-pink text-white py-4 rounded-2xl font-black text-lg mb-3">ไปชำระเงิน</button>
+      <button id="btn-confirm-receipt" class="hidden w-full bg-emerald-500 text-white py-4 rounded-2xl font-black text-lg mb-3">ได้รับสินค้าแล้ว</button>
+      <button id="btn-order-rate" class="hidden w-full bg-amber-500 text-white py-4 rounded-2xl font-black text-lg mb-3">ให้คะแนนสินค้า</button>
+      <button id="btn-order-buy-again" class="w-full bg-gray-100 text-gray-700 py-4 rounded-2xl font-black text-lg">สั่งซื้อสินค้าอีกครั้ง</button>
+    </div>
+  </div>
+
+  <!-- ฟอร์มให้คะแนน -->
+  <div id="order-review-view" class="page-section bg-white min-h-screen pb-10">
+    <div class="theme-pink text-white p-4 flex items-center gap-3 sticky top-0 z-40">
+      <button id="btn-back-review" class="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center text-lg"><i class="fa-solid fa-arrow-left"></i></button>
+      <h2 class="text-xl font-bold">ให้คะแนนสินค้า</h2>
+    </div>
+    <div class="p-4">
+      <p class="text-lg font-bold text-gray-700 mb-3 text-center">คุณพอใจกับสินค้าที่สั่งมากแค่ไหน?</p>
+      <div class="flex justify-center gap-3 mb-6" id="review-stars"></div>
+      <textarea id="review-comment" rows="4" class="form-input" placeholder="เขียนรีวิว (ไม่บังคับ)..."></textarea>
+      <button id="btn-submit-review" class="w-full theme-pink text-white py-4 rounded-2xl font-black text-lg mt-4">ส่งคะแนน</button>
+    </div>
+  </div>
+
+  <!-- สินค้าที่ถูกใจ -->
+  <div id="liked-products-view" class="page-section bg-gray-50 min-h-screen pb-10">
+    <div class="theme-pink text-white p-4 flex items-center gap-3 sticky top-0 z-40">
+      <button id="btn-back-liked" class="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center text-lg"><i class="fa-solid fa-arrow-left"></i></button>
+      <h2 class="text-xl font-bold">สินค้าที่ถูกใจ</h2>
+    </div>
+    <div class="p-4">
+      <div id="liked-products-grid" class="grid grid-cols-2 gap-3"></div>
+    </div>
+  </div>
+
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>

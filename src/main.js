@@ -613,3 +613,468 @@ document.getElementById('btn-confirm-order').onclick = async () => {
     showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
   }
 };
+
+// ================= หน้าชำระเงิน (QR PromptPay + สลิป) =================
+
+// อัลกอริทึมสร้าง PromptPay QR Payload (มาตรฐาน EMV QR) — คำนวณเองไม่ต้องพึ่ง API เสียเงิน
+function formatPromptPayTarget(id) {
+  id = id.replace(/[^0-9]/g, '');
+  if (id.length === 13) return id; // เลขบัตร ปชช.
+  if (id.length === 10 && id.startsWith('0')) return '66' + id.substring(1); // เบอร์โทร
+  return id;
+}
+
+function crc16(data) {
+  let crc = 0xFFFF;
+  for (let i = 0; i < data.length; i++) {
+    crc ^= data.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+      crc &= 0xFFFF;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+}
+
+function tlv(id, value) {
+  const len = value.length.toString().padStart(2, '0');
+  return `${id}${len}${value}`;
+}
+
+function generatePromptPayPayload(promptpayId, amount) {
+  const target = formatPromptPayTarget(promptpayId);
+  const isPhone = target.length === 13 && target.startsWith('66');
+
+  const merchantInfo = tlv('00', 'A000000677010111') +
+    tlv(isPhone ? '01' : '02', target);
+
+  let payload =
+    tlv('00', '01') +
+    tlv('01', '11') +
+    tlv('29', merchantInfo) +
+    tlv('53', '764') +
+    tlv('54', amount.toFixed(2)) +
+    tlv('58', 'TH');
+
+  payload += '6304';
+  const checksum = crc16(payload);
+  return payload + checksum;
+}
+
+let currentOrderIdForPayment = null;
+let paymentCountdownInterval = null;
+
+async function openPaymentView(orderId) {
+  currentOrderIdForPayment = orderId;
+  const orderDoc = await getDoc(doc(db, 'orders', orderId));
+  if (!orderDoc.exists()) { showToast('ไม่พบคำสั่งซื้อนี้', 'error'); return; }
+  const order = orderDoc.data();
+
+  const shopDoc = await getDoc(doc(db, 'shops', order.shopId));
+  const shop = shopDoc.exists() ? shopDoc.data() : {};
+
+  document.getElementById('payment-amount').innerText = `฿${order.totalAmount.toLocaleString()}`;
+  document.getElementById('payment-bank-name').innerText = shop.bankName || '-';
+  document.getElementById('payment-account-number').innerText = shop.bankAccountNumber || '-';
+  document.getElementById('payment-account-name').innerText = shop.bankAccountName || '-';
+
+  if (shop.promptpayId) {
+    const payload = generatePromptPayPayload(shop.promptpayId, order.totalAmount);
+    document.getElementById('payment-qr-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(payload)}`;
+  }
+
+  // นับถอยหลัง 24 ชม.
+  if (paymentCountdownInterval) clearInterval(paymentCountdownInterval);
+  const deadline = order.slipDeadline.toDate ? order.slipDeadline.toDate() : new Date(order.slipDeadline);
+  paymentCountdownInterval = setInterval(() => {
+    const diff = deadline - new Date();
+    if (diff <= 0) {
+      clearInterval(paymentCountdownInterval);
+      document.getElementById('payment-countdown').innerText = 'หมดเวลาแล้ว';
+      return;
+    }
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    document.getElementById('payment-countdown').innerText = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }, 1000);
+
+  document.getElementById('slip-preview').classList.add('hidden');
+  document.getElementById('slip-placeholder').classList.remove('hidden');
+  document.getElementById('slip-input').value = '';
+
+  showView('payment-view');
+}
+window.openPaymentView = openPaymentView;
+
+document.getElementById('btn-download-qr').onclick = () => {
+  const link = document.createElement('a');
+  link.href = document.getElementById('payment-qr-img').src;
+  link.download = 'promptpay-qr.png';
+  link.target = '_blank';
+  link.click();
+};
+
+document.getElementById('btn-leave-payment').onclick = () => {
+  if (paymentCountdownInterval) clearInterval(paymentCountdownInterval);
+  showPendingStatus('pending_payment');
+};
+
+let selectedSlipFile = null;
+
+document.getElementById('slip-preview-box').onclick = () => document.getElementById('slip-input').click();
+
+document.getElementById('slip-input').onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  selectedSlipFile = file;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    document.getElementById('slip-preview').src = ev.target.result;
+    document.getElementById('slip-preview').classList.remove('hidden');
+    document.getElementById('slip-placeholder').classList.add('hidden');
+  };
+  reader.readAsDataURL(file);
+};
+
+document.getElementById('btn-submit-slip').onclick = async () => {
+  if (!selectedSlipFile) {
+    showToast('กรุณาแนบภาพสลิปก่อน', 'error');
+    return;
+  }
+
+  showLoading('กำลังอัปโหลดสลิป...');
+  try {
+    const formData = new FormData();
+    formData.append('file', selectedSlipFile);
+    formData.append('upload_preset', 'goodday_unsigned');
+
+    const uploadRes = await fetch('https://api.cloudinary.com/v1_1/l1htg1ks/image/upload', {
+      method: 'POST', body: formData
+    });
+    const uploadData = await uploadRes.json();
+
+    if (!uploadData.secure_url) {
+      hideLoading();
+      showToast('อัปโหลดสลิปไม่สำเร็จ กรุณาลองใหม่', 'error');
+      return;
+    }
+
+    showLoading('กำลังยืนยันการชำระเงิน...');
+
+    const res = await fetch('/api/submit-slip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid: currentUid, orderId: currentOrderIdForPayment, slipUrl: uploadData.secure_url })
+    });
+    const data = await res.json();
+    hideLoading();
+
+    if (!res.ok) {
+      showToast(data.error || 'ยืนยันไม่สำเร็จ', 'error');
+      return;
+    }
+
+    if (paymentCountdownInterval) clearInterval(paymentCountdownInterval);
+    showPendingStatus('pending_verify');
+  } catch (err) {
+    hideLoading();
+    showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
+  }
+};
+
+function showPendingStatus(status) {
+  const titleEl = document.getElementById('pending-title');
+  const msgEl = document.getElementById('pending-message');
+
+  if (status === 'pending_payment') {
+    titleEl.innerText = 'สินค้าอยู่ระหว่างรอชำระเงิน';
+    msgEl.innerText = 'กรุณาชำระเงินภายใน 24 ชั่วโมง ไม่งั้นคำสั่งซื้ออาจถูกยกเลิก';
+  } else {
+    titleEl.innerText = 'รอการตรวจสอบจากทีมงาน';
+    msgEl.innerText = 'ทีมงานจะตรวจสอบสลิปและอัปเดตสถานะให้เร็วที่สุด';
+  }
+
+  showView('order-pending-view');
+}
+
+document.getElementById('btn-pending-go-home').onclick = async () => {
+  showView('home-view');
+  await loadProducts();
+};
+document.getElementById('btn-pending-go-status').onclick = () => {
+  showToast('หน้าติดตามสถานะสินค้า จะทำในเฟสถัดไป', 'info');
+};
+
+// ================= บัญชีของฉัน =================
+
+document.getElementById('tab-account').onclick = () => { showView('account-view'); loadAccount(); };
+document.getElementById('acc-tab-home').onclick = () => showView('home-view');
+document.getElementById('acc-tab-cart').onclick = () => { showView('cart-view'); loadCart(); };
+document.getElementById('acc-tab-account').onclick = () => { showView('account-view'); loadAccount(); };
+
+async function loadAccount() {
+  const userDoc = await getDoc(doc(db, 'users', currentUid));
+  const data = userDoc.data();
+  document.getElementById('acc-name').innerText = data.name || 'ผู้ใช้งาน';
+  document.getElementById('acc-memberid').innerText = data.memberId || '-';
+
+  const addrSnap = await getDocs(collection(db, 'users', currentUid, 'addresses'));
+  const addrList = document.getElementById('acc-address-list');
+  if (addrSnap.empty) {
+    addrList.innerHTML = '<p class="text-base text-gray-400 text-center py-3">ยังไม่มีที่อยู่</p>';
+  } else {
+    const items = [];
+    addrSnap.forEach(d => items.push(d.data()));
+    addrList.innerHTML = items.map(a => `
+      <div class="bg-white rounded-xl border border-gray-100 p-3 text-base">
+        <p class="font-bold text-gray-800">${a.recipient} · ${a.phone}</p>
+        <p class="text-gray-500">${a.detail} ${a.subdist} ${a.dist} ${a.prov} ${a.zip}</p>
+      </div>
+    `).join('');
+  }
+}
+
+// --- สินค้าที่ถูกใจ ---
+async function openLikedProductsView() {
+  await loadLikedProducts();
+  const liked = allProductsData.filter(p => productLikedIds.has(p.id));
+  const grid = document.getElementById('liked-products-grid');
+
+  if (liked.length === 0) {
+    grid.innerHTML = '<p class="col-span-2 text-center text-gray-400 text-lg py-8">ยังไม่มีสินค้าที่ถูกใจ</p>';
+  } else {
+    grid.innerHTML = liked.map(p => {
+      const shop = allShopsData[p.shopId] || {};
+      return `
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer" onclick="openProductDetail('${p.id}')">
+          <div class="w-full aspect-square bg-gradient-to-br from-pink-50 to-rose-100 flex items-center justify-center text-4xl text-pink-300">
+            <i class="fa-solid fa-box-open"></i>
+          </div>
+          <div class="p-3">
+            <h4 class="font-bold text-gray-800 text-base leading-tight mb-1 line-clamp-2">${p.name}</h4>
+            <p class="text-lg font-black theme-text mb-1">฿${(p.price || 0).toLocaleString()}</p>
+            <p class="text-sm text-gray-500 truncate"><i class="fa-solid fa-shop mr-1"></i>${shop.name || 'ร้านค้า'}</p>
+          </div>
+        </div>`;
+    }).join('');
+  }
+  showView('liked-products-view');
+}
+window.openLikedProductsView = openLikedProductsView;
+document.getElementById('btn-back-liked').onclick = () => showView('account-view');
+
+// ================= ติดตามสถานะสินค้า =================
+
+let allMyOrders = [];
+let currentOrderStatusTab = 'pending_payment';
+let currentOrderDetail = null;
+
+const orderStatusLabel = {
+  pending_payment: 'รอชำระเงิน',
+  pending_verify: 'รอตรวจสอบการชำระเงิน',
+  preparing: 'กำลังจัดส่ง',
+  shipping: 'อยู่ระหว่างการจัดส่ง',
+  completed: 'เสร็จสิ้น'
+};
+const orderStatusColor = {
+  pending_payment: 'bg-orange-50 text-orange-600',
+  pending_verify: 'bg-amber-50 text-amber-600',
+  preparing: 'bg-blue-50 text-blue-600',
+  shipping: 'bg-indigo-50 text-indigo-600',
+  completed: 'bg-emerald-50 text-emerald-600'
+};
+
+function openOrderStatus() {
+  showView('order-status-view');
+  loadMyOrders();
+}
+window.openOrderStatus = openOrderStatus;
+
+document.getElementById('btn-back-order-status').onclick = () => showView('account-view');
+
+document.querySelectorAll('.order-tab').forEach(tab => {
+  tab.onclick = () => {
+    currentOrderStatusTab = tab.dataset.tab;
+    document.querySelectorAll('.order-tab').forEach(t => {
+      t.className = 'order-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 text-gray-400 border-b-2 border-transparent';
+    });
+    tab.className = 'order-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 theme-text border-b-2 border-pink-500';
+    renderOrderStatusList();
+  };
+});
+
+async function loadMyOrders() {
+  const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  allMyOrders = [];
+  snap.forEach(d => { if (d.data().buyerUid === currentUid) allMyOrders.push({ id: d.id, ...d.data() }); });
+  renderOrderStatusList();
+}
+
+function renderOrderStatusList() {
+  const container = document.getElementById('order-status-list');
+  let filtered;
+
+  if (currentOrderStatusTab === 'pending_payment') {
+    filtered = allMyOrders.filter(o => o.status === 'pending_payment' || o.status === 'pending_verify');
+  } else if (currentOrderStatusTab === 'to_rate') {
+    filtered = allMyOrders.filter(o => o.status === 'completed' && !o.rating);
+  } else {
+    filtered = allMyOrders.filter(o => o.status === currentOrderStatusTab);
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">ไม่มีคำสั่งซื้อในหมวดนี้</p>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(o => {
+    const shop = allShopsData[o.shopId] || {};
+    return `
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 cursor-pointer" onclick="openOrderDetail('${o.id}')">
+        <div class="flex justify-between items-center mb-2">
+          <p class="text-base font-bold text-gray-500"><i class="fa-solid fa-shop mr-1"></i>${shop.name || 'ร้านค้า'}</p>
+          <span class="text-sm font-bold px-2.5 py-1 rounded-full ${orderStatusColor[o.status] || ''}">${orderStatusLabel[o.status] || o.status}</span>
+        </div>
+        ${o.items.map(it => `<p class="text-base text-gray-700">${it.name} ${it.variant ? `(${it.variant})` : ''} x${it.qty}</p>`).join('')}
+        <p class="text-right text-lg font-black theme-text mt-2">฿${o.totalAmount.toLocaleString()}</p>
+      </div>`;
+  }).join('');
+}
+
+function openOrderDetail(orderId) {
+  const o = allMyOrders.find(x => x.id === orderId);
+  if (!o) return;
+  currentOrderDetail = o;
+
+  const badge = document.getElementById('od-status-badge');
+  badge.innerText = orderStatusLabel[o.status] || o.status;
+  badge.className = `inline-block text-base font-bold px-3 py-1.5 rounded-full mb-3 ${orderStatusColor[o.status] || ''}`;
+
+  document.getElementById('od-items-list').innerHTML = o.items.map(it => `
+    <div class="flex justify-between text-base">
+      <span class="text-gray-700">${it.name} ${it.variant ? `(${it.variant})` : ''} x${it.qty}</span>
+      <span class="font-bold text-gray-800">฿${(it.price * it.qty).toLocaleString()}</span>
+    </div>
+  `).join('');
+
+  document.getElementById('od-items-total').innerText = `฿${o.itemsTotal.toLocaleString()}`;
+  document.getElementById('od-delivery-fee').innerText = `฿${o.deliveryFee.toLocaleString()}`;
+  document.getElementById('od-discount-row').classList.toggle('hidden', !o.discountAmount);
+  document.getElementById('od-discount').innerText = `-฿${(o.discountAmount || 0).toLocaleString()}`;
+  document.getElementById('od-grand-total').innerText = `฿${o.totalAmount.toLocaleString()}`;
+
+  document.getElementById('btn-order-go-pay').classList.toggle('hidden', o.status !== 'pending_payment');
+  document.getElementById('btn-confirm-receipt').classList.toggle('hidden', o.status !== 'shipping');
+  document.getElementById('btn-order-rate').classList.toggle('hidden', !(o.status === 'completed' && !o.rating));
+
+  showView('order-detail-view');
+}
+window.openOrderDetail = openOrderDetail;
+
+document.getElementById('btn-back-order-detail').onclick = () => showView('order-status-view');
+
+document.getElementById('btn-order-go-pay').onclick = () => openPaymentView(currentOrderDetail.id);
+
+document.getElementById('btn-confirm-receipt').onclick = async () => {
+  if (!confirm('ยืนยันว่าได้รับสินค้าเรียบร้อยแล้วใช่ไหม?')) return;
+
+  showLoading('กำลังยืนยันรับสินค้า...');
+  try {
+    const res = await fetch('/api/confirm-receipt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid: currentUid, orderId: currentOrderDetail.id })
+    });
+    const data = await res.json();
+    hideLoading();
+
+    if (!res.ok) { showToast(data.error || 'ยืนยันไม่สำเร็จ', 'error'); return; }
+
+    showToast('ยืนยันรับสินค้าสำเร็จ!', 'success');
+    await loadMyOrders();
+    openReviewForm(currentOrderDetail.id);
+  } catch (err) {
+    hideLoading();
+    showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
+  }
+};
+
+document.getElementById('btn-order-rate').onclick = () => openReviewForm(currentOrderDetail.id);
+
+let selectedOrderRating = 0;
+
+function openReviewForm(orderId) {
+  currentOrderDetail = allMyOrders.find(o => o.id === orderId) || currentOrderDetail;
+  selectedOrderRating = 0;
+  document.getElementById('review-comment').value = '';
+  renderReviewStars();
+  showView('order-review-view');
+}
+
+document.getElementById('btn-back-review').onclick = () => showView('order-detail-view');
+
+function renderReviewStars() {
+  document.getElementById('review-stars').innerHTML = [1,2,3,4,5].map(n => `
+    <button data-star="${n}" class="review-star-btn text-4xl ${n <= selectedOrderRating ? 'text-amber-400' : 'text-gray-200'}">
+      <i class="fa-solid fa-star"></i>
+    </button>
+  `).join('');
+  document.querySelectorAll('.review-star-btn').forEach(btn => {
+    btn.onclick = () => { selectedOrderRating = Number(btn.dataset.star); renderReviewStars(); };
+  });
+}
+
+document.getElementById('btn-submit-review').onclick = async () => {
+  if (selectedOrderRating === 0) { showToast('กรุณาเลือกจำนวนดาวก่อน', 'error'); return; }
+
+  showLoading('กำลังส่งคะแนน...');
+  try {
+    const res = await fetch('/api/submit-order-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uid: currentUid, orderId: currentOrderDetail.id,
+        rating: selectedOrderRating, comment: document.getElementById('review-comment').value.trim()
+      })
+    });
+    const data = await res.json();
+    hideLoading();
+
+    if (!res.ok) { showToast(data.error || 'ส่งคะแนนไม่สำเร็จ', 'error'); return; }
+
+    showToast('ขอบคุณสำหรับคะแนน!', 'success');
+    showView('order-status-view');
+    await loadMyOrders();
+  } catch (err) {
+    hideLoading();
+    showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
+  }
+};
+
+// --- สั่งซื้อสินค้าอีกครั้ง ---
+document.getElementById('btn-order-buy-again').onclick = async () => {
+  showLoading('กำลังเพิ่มลงตะกร้า...');
+  try {
+    for (const item of currentOrderDetail.items) {
+      await addDoc(collection(db, 'users', currentUid, 'cart'), {
+        productId: item.productId,
+        shopId: currentOrderDetail.shopId,
+        name: item.name,
+        price: item.price,
+        variant: item.variant || null,
+        qty: item.qty,
+        addedAt: serverTimestamp()
+      });
+    }
+    await updateCartBadge();
+    showToast('เพิ่มสินค้าลงตะกร้าแล้ว!', 'success');
+    showView('cart-view');
+    await loadCart();
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+  } finally {
+    hideLoading();
+  }
+};
