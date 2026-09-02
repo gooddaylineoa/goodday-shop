@@ -129,6 +129,68 @@
       </div>
     </div>
 
+    <!-- รายละเอียดสินค้า -->
+    <div id="product-detail-view" class="page-section bg-white min-h-screen pb-24">
+      <div class="theme-pink text-white p-4 flex items-center gap-3 sticky top-0 z-40">
+        <button id="btn-back-product" class="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center text-lg"><i class="fa-solid fa-arrow-left"></i></button>
+        <h2 class="text-xl font-bold">รายละเอียดสินค้า</h2>
+      </div>
+
+      <div class="w-full aspect-square bg-gradient-to-br from-pink-50 to-rose-100 flex items-center justify-center text-7xl text-pink-300">
+        <i class="fa-solid fa-box-open"></i>
+      </div>
+
+      <div class="p-4">
+        <div class="flex justify-between items-start mb-2">
+          <h2 id="pd-name" class="text-2xl font-black text-gray-800 flex-1">-</h2>
+          <button id="btn-like-product" class="w-11 h-11 bg-gray-50 rounded-full flex items-center justify-center text-xl text-gray-400 shrink-0 ml-2">
+            <i class="fa-regular fa-heart"></i>
+          </button>
+        </div>
+        <p id="pd-price" class="text-3xl font-black theme-text mb-2">฿0</p>
+        <div class="flex items-center gap-4 text-base text-gray-500 mb-4">
+          <span><i class="fa-solid fa-star text-amber-400"></i> <span id="pd-rating">0.0</span> (<span id="pd-rating-count">0</span> รีวิว)</span>
+          <span>ขายแล้ว <span id="pd-sold">0</span></span>
+          <span>เหลือ <span id="pd-stock">0</span> ชิ้น</span>
+        </div>
+
+        <div onclick="openShopPage(currentProductShopId)" class="flex items-center gap-3 bg-gray-50 rounded-2xl p-3 mb-4 cursor-pointer">
+          <div class="w-11 h-11 rounded-full bg-pink-100 flex items-center justify-center text-xl theme-text"><i class="fa-solid fa-shop"></i></div>
+          <p id="pd-shop-name" class="font-bold text-gray-700 flex-1">ร้านค้า</p>
+          <i class="fa-solid fa-chevron-right text-gray-300"></i>
+        </div>
+
+        <p id="pd-description" class="text-lg text-gray-600 mb-4"></p>
+
+        <div id="pd-variant-section" class="hidden mb-4">
+          <p class="text-lg font-black text-gray-800 mb-2">เลือกตัวเลือก</p>
+          <div id="pd-variant-options" class="flex flex-wrap gap-2"></div>
+        </div>
+
+        <div class="flex items-center justify-between mb-4">
+          <p class="text-lg font-black text-gray-800">จำนวน</p>
+          <div class="flex items-center gap-3">
+            <button id="pd-qty-minus" class="w-10 h-10 bg-gray-100 rounded-full font-black text-xl">-</button>
+            <span id="pd-qty" class="text-xl font-black w-8 text-center">1</span>
+            <button id="pd-qty-plus" class="w-10 h-10 bg-gray-100 rounded-full font-black text-xl">+</button>
+          </div>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-6">
+          <p class="text-base font-bold text-blue-700"><i class="fa-solid fa-truck mr-2"></i>ประมาณการจัดส่ง</p>
+          <p id="pd-delivery-estimate" class="text-lg text-blue-600 font-black mt-1">-</p>
+        </div>
+
+        <h3 class="text-lg font-black text-gray-800 mb-3">รีวิวจากลูกค้า</h3>
+        <div id="pd-reviews-list" class="space-y-3 mb-6"></div>
+      </div>
+
+      <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-200 p-3 flex gap-3 z-50">
+        <button id="btn-add-cart" class="flex-1 bg-pink-50 theme-text py-4 rounded-2xl font-black text-lg border-2 border-pink-500">เพิ่มลงตะกร้า</button>
+        <button id="btn-buy-now" class="flex-1 theme-pink text-white py-4 rounded-2xl font-black text-lg">ซื้อเลย</button>
+      </div>
+    </div>
+
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>

@@ -64,7 +64,9 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     showView('home-view');
+    await loadLikedProducts();
     await loadProducts();
+    await updateCartBadge();
   } else {
     currentUid = null;
     try {
@@ -152,7 +154,7 @@ function renderProductGrid(products) {
   grid.innerHTML = products.map(p => {
     const shop = allShopsData[p.shopId] || {};
     return `
-      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer" onclick="openShopPage('${p.shopId}')">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer" onclick="openProductDetail('${p.id}')">
         <div class="w-full aspect-square bg-gradient-to-br from-pink-50 to-rose-100 flex items-center justify-center text-4xl text-pink-300">
           <i class="fa-solid fa-box-open"></i>
         </div>
@@ -207,3 +209,186 @@ function fillProvinceSelect(selectEl) {
   });
 }
 fillProvinceSelect(document.getElementById('fa-prov'));
+
+import { addDoc, deleteDoc, query, orderBy, updateDoc, increment } from 'firebase/firestore';
+// 🆕 ต้องเพิ่ม import เหล่านี้เข้าไปในบรรทัด import เดิมด้านบนสุดของไฟล์ (รวมกับที่มีอยู่แล้ว)
+
+let currentProductId = null;
+let currentProductShopId = null;
+window.currentProductShopId = null;
+let selectedVariant = null;
+let selectedQty = 1;
+let productLikedIds = new Set();
+
+function openProductDetail(productId) {
+  const p = allProductsData.find(x => x.id === productId);
+  if (!p) return;
+  const shop = allShopsData[p.shopId] || {};
+
+  currentProductId = productId;
+  currentProductShopId = p.shopId;
+  window.currentProductShopId = p.shopId;
+  selectedVariant = null;
+  selectedQty = 1;
+
+  document.getElementById('pd-name').innerText = p.name;
+  document.getElementById('pd-price').innerText = `฿${(p.price || 0).toLocaleString()}`;
+  document.getElementById('pd-rating').innerText = (p.rating || 0).toFixed(1);
+  document.getElementById('pd-rating-count').innerText = p.ratingCount || 0;
+  document.getElementById('pd-sold').innerText = p.sold || 0;
+  document.getElementById('pd-stock').innerText = p.stock || 0;
+  document.getElementById('pd-shop-name').innerText = shop.name || 'ร้านค้า';
+  document.getElementById('pd-description').innerText = p.description || '';
+  document.getElementById('pd-qty').innerText = '1';
+
+  // ตัวเลือกสี/ไซส์ (ถ้ามี)
+  const variantSection = document.getElementById('pd-variant-section');
+  if (p.variants && p.variants.length > 0) {
+    variantSection.classList.remove('hidden');
+    document.getElementById('pd-variant-options').innerHTML = p.variants[0].options.map(opt => `
+      <button data-variant="${opt}" class="pd-variant-btn px-4 py-2 rounded-xl border-2 border-gray-200 text-base font-bold">${opt}</button>
+    `).join('');
+    document.querySelectorAll('.pd-variant-btn').forEach(btn => {
+      btn.onclick = () => {
+        selectedVariant = btn.dataset.variant;
+        document.querySelectorAll('.pd-variant-btn').forEach(b => b.className = 'pd-variant-btn px-4 py-2 rounded-xl border-2 border-gray-200 text-base font-bold');
+        btn.className = 'pd-variant-btn px-4 py-2 rounded-xl border-2 theme-pink text-white border-transparent font-bold';
+      };
+    });
+  } else {
+    variantSection.classList.add('hidden');
+  }
+
+  // คำนวณวันจัดส่งโดยประมาณ (สั่งวันนี้ → ได้รับภายใน 3-5 วัน)
+  const today = new Date();
+  const minDate = new Date(today); minDate.setDate(today.getDate() + 3);
+  const maxDate = new Date(today); maxDate.setDate(today.getDate() + 5);
+  const thaiMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const fmt = (d) => `${d.getDate()} ${thaiMonths[d.getMonth()]}`;
+  document.getElementById('pd-delivery-estimate').innerText = `สั่งวันนี้ ได้รับภายใน ${fmt(minDate)} - ${fmt(maxDate)} ${maxDate.getFullYear() + 543}`;
+
+  // สถานะถูกใจ
+  const likeBtn = document.getElementById('btn-like-product');
+  const isLiked = productLikedIds.has(productId);
+  likeBtn.innerHTML = isLiked ? '<i class="fa-solid fa-heart"></i>' : '<i class="fa-regular fa-heart"></i>';
+  likeBtn.className = `w-11 h-11 bg-gray-50 rounded-full flex items-center justify-center text-xl shrink-0 ml-2 ${isLiked ? 'text-rose-500' : 'text-gray-400'}`;
+
+  loadProductReviews(productId);
+  showView('product-detail-view');
+}
+window.openProductDetail = openProductDetail;
+
+document.getElementById('btn-back-product').onclick = () => showView('home-view');
+
+document.getElementById('pd-qty-minus').onclick = () => {
+  if (selectedQty > 1) { selectedQty--; document.getElementById('pd-qty').innerText = selectedQty; }
+};
+document.getElementById('pd-qty-plus').onclick = () => {
+  const p = allProductsData.find(x => x.id === currentProductId);
+  if (selectedQty < (p.stock || 0)) { selectedQty++; document.getElementById('pd-qty').innerText = selectedQty; }
+  else showToast('จำนวนสินค้าไม่พอ', 'error');
+};
+
+// --- ถูกใจสินค้า ---
+document.getElementById('btn-like-product').onclick = async () => {
+  const likeRef = doc(db, 'users', currentUid, 'likedProducts', currentProductId);
+  const isLiked = productLikedIds.has(currentProductId);
+
+  showLoading(isLiked ? 'กำลังเอาออกจากรายการถูกใจ...' : 'กำลังเพิ่มในรายการถูกใจ...');
+  try {
+    if (isLiked) {
+      await deleteDoc(likeRef);
+      productLikedIds.delete(currentProductId);
+    } else {
+      await setDoc(likeRef, { productId: currentProductId, likedAt: serverTimestamp() });
+      productLikedIds.add(currentProductId);
+    }
+    openProductDetail(currentProductId); // รีเฟรชไอคอนหัวใจ
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+  } finally {
+    hideLoading();
+  }
+};
+
+// --- เพิ่มลงตะกร้า (เก็บถาวรใน Firestore) ---
+document.getElementById('btn-add-cart').onclick = async () => {
+  const p = allProductsData.find(x => x.id === currentProductId);
+  if (p.variants && p.variants.length > 0 && !selectedVariant) {
+    showToast('กรุณาเลือกตัวเลือกสินค้าก่อน', 'error');
+    return;
+  }
+
+  showLoading('กำลังเพิ่มลงตะกร้า...');
+  try {
+    await addDoc(collection(db, 'users', currentUid, 'cart'), {
+      productId: currentProductId,
+      shopId: currentProductShopId,
+      name: p.name,
+      price: p.price,
+      variant: selectedVariant || null,
+      qty: selectedQty,
+      addedAt: serverTimestamp()
+    });
+    showToast('เพิ่มลงตะกร้าแล้ว!', 'success');
+    await updateCartBadge();
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+  } finally {
+    hideLoading();
+  }
+};
+
+// --- ซื้อเลย (ไปหน้า checkout แยก จะทำในเฟสถัดไป) ---
+document.getElementById('btn-buy-now').onclick = () => {
+  const p = allProductsData.find(x => x.id === currentProductId);
+  if (p.variants && p.variants.length > 0 && !selectedVariant) {
+    showToast('กรุณาเลือกตัวเลือกสินค้าก่อน', 'error');
+    return;
+  }
+  showToast('หน้าสั่งซื้อสินค้า จะทำในเฟสถัดไป', 'info');
+};
+
+// --- นับจำนวนสินค้าในตะกร้า โชว์เป็น badge ที่แท็บล่าง ---
+async function updateCartBadge() {
+  const cartSnap = await getDocs(collection(db, 'users', currentUid, 'cart'));
+  const badge = document.getElementById('cart-badge');
+  if (badge) {
+    if (cartSnap.size > 0) {
+      badge.innerText = cartSnap.size;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+}
+
+// --- รีวิวสินค้า ---
+async function loadProductReviews(productId) {
+  const container = document.getElementById('pd-reviews-list');
+  container.innerHTML = '<p class="text-center text-gray-400 text-base py-4">กำลังโหลดรีวิว...</p>';
+
+  const q = query(collection(db, 'reviews'), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  const reviews = [];
+  snap.forEach(d => { if (d.data().productId === productId) reviews.push(d.data()); });
+
+  if (reviews.length === 0) {
+    container.innerHTML = '<p class="text-center text-gray-400 text-base py-4">ยังไม่มีรีวิว</p>';
+    return;
+  }
+
+  container.innerHTML = reviews.map(r => `
+    <div class="bg-gray-50 rounded-xl p-3">
+      <div class="text-amber-400 text-base mb-1">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</div>
+      <p class="text-base text-gray-600">${r.comment || ''}</p>
+    </div>
+  `).join('');
+}
+
+// --- โหลดรายการถูกใจตอน login ---
+async function loadLikedProducts() {
+  const snap = await getDocs(collection(db, 'users', currentUid, 'likedProducts'));
+  productLikedIds = new Set();
+  snap.forEach(d => productLikedIds.add(d.id));
+}
