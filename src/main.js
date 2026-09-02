@@ -1,6 +1,6 @@
 import { auth, db } from './firebase.js';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, getDocs, collection, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, query, orderBy, serverTimestamp, increment, onSnapshot } from 'firebase/firestore';
 import { initLineAuth } from './lineAuth.js';
 
 function showToast(message, type = 'info', duration = 3200) {
@@ -1248,3 +1248,102 @@ async function updateNotifBadge() {
     badge.classList.add('hidden');
   }
 }
+
+// ================= แชทผู้ซื้อ-ร้านค้า =================
+
+let currentChatId = null;
+let chatUnsubscribe = null; // เก็บ listener ไว้เพื่อยกเลิกตอนออกจากหน้าแชท
+
+function getChatId(buyerUid, shopId) {
+  return `${buyerUid}__${shopId}`; // deterministic ID ป้องกันสร้างแชทซ้ำ
+}
+
+async function openChatWithShop(shopId) {
+  const shop = allShopsData[shopId];
+  if (!shop) return;
+
+  currentChatId = getChatId(currentUid, shopId);
+  document.getElementById('chat-shop-name').innerText = shop.name;
+
+  const chatRef = doc(db, 'chats', currentChatId);
+  const chatDoc = await getDoc(chatRef);
+
+  if (!chatDoc.exists()) {
+    // สร้างห้องแชทใหม่ครั้งแรกที่คุยกับร้านนี้
+    const userDoc = await getDoc(doc(db, 'users', currentUid));
+    await setDoc(chatRef, {
+      buyerUid: currentUid,
+      shopId,
+      buyerName: userDoc.data().name || 'ผู้ใช้งาน',
+      shopName: shop.name,
+      lastMessage: '',
+      lastMessageAt: serverTimestamp()
+    });
+  }
+
+  showView('chat-view');
+  listenToChatMessages(currentChatId);
+}
+window.openChatWithShop = openChatWithShop;
+
+function listenToChatMessages(chatId) {
+  if (chatUnsubscribe) chatUnsubscribe(); // ยกเลิก listener เก่าก่อน กันซ้อนกัน
+
+  const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('createdAt', 'asc'));
+  chatUnsubscribe = onSnapshot(q, (snap) => {
+    const container = document.getElementById('chat-messages-container');
+    if (snap.empty) {
+      container.innerHTML = '<p class="text-center text-gray-400 text-base py-8">เริ่มต้นทักทายร้านค้าได้เลย</p>';
+      return;
+    }
+
+    container.innerHTML = snap.docs.map(d => {
+      const m = d.data();
+      const isMe = m.senderUid === currentUid;
+      return `
+        <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
+          <div class="max-w-[75%] ${isMe ? 'theme-pink text-white' : 'bg-white text-gray-800 border border-gray-100'} rounded-2xl px-4 py-2.5 text-base">
+            ${m.text}
+          </div>
+        </div>`;
+    }).join('');
+
+    // เลื่อนไปข้อความล่าสุดเสมอ
+    container.scrollTop = container.scrollHeight;
+  });
+}
+
+document.getElementById('btn-back-chat').onclick = () => {
+  if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
+  showView('shop-view');
+};
+
+document.getElementById('btn-send-chat').onclick = async () => {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text || !currentChatId) return;
+
+  input.value = '';
+
+  try {
+    await addDoc(collection(db, 'chats', currentChatId, 'messages'), {
+      senderUid: currentUid,
+      senderRole: 'buyer',
+      text,
+      createdAt: serverTimestamp()
+    });
+
+    await updateDoc(doc(db, 'chats', currentChatId), {
+      lastMessage: text,
+      lastMessageAt: serverTimestamp()
+    });
+  } catch (err) {
+    showToast('ส่งข้อความไม่สำเร็จ: ' + err.message, 'error');
+    input.value = text; // คืนข้อความกลับให้พิมพ์ใหม่ได้
+  }
+};
+
+// กด Enter ส่งข้อความได้เลย ไม่ต้องกดปุ่มอย่างเดียว
+document.getElementById('chat-input').onkeypress = (e) => {
+  if (e.key === 'Enter') document.getElementById('btn-send-chat').click();
+};
