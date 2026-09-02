@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Goodday Shop</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Sarabun', sans-serif; background-color: #F3F4F6; }
+    .theme-pink { background-color: #d81b60; }
+    .theme-text { color: #d81b60; }
+    .form-input {
+      width: 100%; border: 1px solid #D1D5DB; border-radius: 0.75rem; padding: 0.75rem;
+      font-size: 1.125rem; background-color: white; color: #374151; font-family: 'Sarabun';
+    }
+    .page-section { display: none !important; }
+    .page-section.active { display: block !important; }
+    .page-section.flex.active { display: flex !important; }
+  </style>
+</head>
+<body class="antialiased text-gray-800">
+  <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-[10000] w-11/12 max-w-md flex flex-col gap-2"></div>
+
+  <div class="max-w-md mx-auto bg-white min-h-screen relative shadow-lg">
+
+    <div id="loading-view" class="page-section active flex items-center justify-center min-h-screen">
+      <div class="text-center">
+        <div class="w-12 h-12 border-4 border-pink-100 border-t-pink-600 rounded-full animate-spin mx-auto mb-4"></div>
+        <p class="text-gray-400 text-lg font-bold">กำลังเข้าสู่ระบบ...</p>
+      </div>
+    </div>
+
+    <div id="not-member-view" class="page-section p-6 pt-16 text-center">
+      <div class="w-24 h-24 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center text-5xl mx-auto mb-6">
+        <i class="fa-solid fa-user-lock"></i>
+      </div>
+      <h2 class="text-2xl font-black text-gray-800 mb-2">ยังไม่ได้สมัครสมาชิก</h2>
+      <p class="text-gray-500 text-lg mb-6">กรุณาสมัครสมาชิก Goodday ก่อน<br>จึงจะใช้งานระบบสั่งซื้อสินค้าได้</p>
+      <button id="btn-go-register" class="w-full theme-pink text-white py-4 rounded-2xl font-black text-lg">ไปสมัครสมาชิก</button>
+    </div>
+
+    <div id="no-address-view" class="page-section p-6 pt-16 text-center">
+      <div class="w-24 h-24 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center text-5xl mx-auto mb-6">
+        <i class="fa-solid fa-location-dot"></i>
+      </div>
+      <h2 class="text-2xl font-black text-gray-800 mb-2">กรุณากรอกที่อยู่ก่อน</h2>
+      <p class="text-gray-500 text-lg mb-6">ต้องมีที่อยู่จัดส่งอย่างน้อย 1 รายการ<br>ก่อนเริ่มช้อปปิ้งได้ครับ</p>
+      <button id="btn-go-add-address" class="w-full theme-pink text-white py-4 rounded-2xl font-black text-lg">ไปกรอกที่อยู่</button>
+    </div>
+
+    <div id="first-address-view" class="page-section p-4 pt-6 bg-white min-h-screen">
+      <h2 class="text-2xl font-black theme-text mb-1">กรอกที่อยู่จัดส่ง</h2>
+      <p class="text-lg text-gray-400 mb-5">ใช้สำหรับจัดส่งสินค้าถึงคุณ</p>
+      <div class="space-y-4">
+        <input id="fa-recipient" type="text" class="form-input" placeholder="ชื่อผู้รับ *">
+        <input id="fa-phone" type="tel" class="form-input" placeholder="เบอร์โทรศัพท์ *">
+        <input id="fa-detail" type="text" class="form-input" placeholder="บ้านเลขที่/หมู่/ถนน *">
+        <div class="grid grid-cols-2 gap-2">
+          <input id="fa-subdist" type="text" class="form-input" placeholder="ตำบล/แขวง *">
+          <input id="fa-dist" type="text" class="form-input" placeholder="อำเภอ/เขต *">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <select id="fa-prov" class="form-input bg-gray-50 font-bold">
+            <option value="">-- จังหวัด * --</option>
+          </select>
+          <input id="fa-zip" type="text" class="form-input" placeholder="รหัสไปรษณีย์ *">
+        </div>
+      </div>
+      <div id="fa-error" class="bg-red-50 text-red-600 text-lg p-3 rounded-lg text-center font-bold hidden mt-4"></div>
+      <button id="btn-save-first-address" class="w-full theme-pink text-white py-4 rounded-2xl font-black text-lg mt-4">บันทึกและเริ่มช้อปปิ้ง</button>
+    </div>
+
+    <div id="home-view" class="page-section bg-gray-50 min-h-screen pb-24">
+      <div class="theme-pink text-white p-4 sticky top-0 z-40">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xl font-black">Goodday Shop</h2>
+          <button id="btn-notif-bell" class="relative w-11 h-11 bg-white/20 rounded-full flex items-center justify-center text-xl">
+            <i class="fa-solid fa-bell"></i>
+          </button>
+        </div>
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          <input id="home-search" type="text" class="form-input pl-11 bg-white" placeholder="ค้นหาสินค้าหรือร้านค้า...">
+        </div>
+      </div>
+      <div class="p-4">
+        <div id="product-grid" class="grid grid-cols-2 gap-3"></div>
+      </div>
+      <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-200 flex z-50">
+        <button id="tab-home" class="flex-1 py-3 flex flex-col items-center gap-1 theme-text">
+          <i class="fa-solid fa-store text-xl"></i><span class="text-sm font-bold">สินค้าทั้งหมด</span>
+        </button>
+        <button id="tab-cart" class="flex-1 py-3 flex flex-col items-center gap-1 text-gray-400">
+          <i class="fa-solid fa-cart-shopping text-xl"></i><span class="text-sm font-bold">ตะกร้า</span>
+        </button>
+        <button id="tab-account" class="flex-1 py-3 flex flex-col items-center gap-1 text-gray-400">
+          <i class="fa-solid fa-user text-xl"></i><span class="text-sm font-bold">บัญชีของฉัน</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="shop-view" class="page-section bg-gray-50 min-h-screen pb-10">
+      <div class="relative">
+        <div id="shop-cover" class="w-full h-36 bg-gradient-to-br from-pink-400 to-rose-500"></div>
+        <button id="btn-back-shop" class="absolute top-4 left-4 w-11 h-11 bg-black/30 rounded-full text-white flex items-center justify-center text-lg">
+          <i class="fa-solid fa-arrow-left"></i>
+        </button>
+      </div>
+      <div class="px-4 -mt-10 relative">
+        <div class="bg-white rounded-2xl shadow-md p-4">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-16 h-16 rounded-full bg-pink-100 flex items-center justify-center text-3xl theme-text shrink-0">
+              <i class="fa-solid fa-shop"></i>
+            </div>
+            <div class="flex-1">
+              <h2 id="shop-name" class="text-xl font-black text-gray-800">-</h2>
+              <p class="text-base text-amber-500 font-bold"><i class="fa-solid fa-star"></i> <span id="shop-rating">0.0</span> · <span id="shop-followers">0</span> ผู้ติดตาม</p>
+            </div>
+          </div>
+          <p id="shop-description" class="text-base text-gray-500 mb-3"></p>
+        </div>
+      </div>
+      <div class="p-4">
+        <h3 class="text-lg font-black text-gray-800 mb-3">สินค้าทั้งหมดในร้าน</h3>
+        <div id="shop-product-grid" class="grid grid-cols-2 gap-3"></div>
+      </div>
+    </div>
+
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
