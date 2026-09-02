@@ -212,9 +212,6 @@ function fillProvinceSelect(selectEl) {
 }
 fillProvinceSelect(document.getElementById('fa-prov'));
 
-import { addDoc, deleteDoc, query, orderBy, updateDoc, increment } from 'firebase/firestore';
-// 🆕 ต้องเพิ่ม import เหล่านี้เข้าไปในบรรทัด import เดิมด้านบนสุดของไฟล์ (รวมกับที่มีอยู่แล้ว)
-
 let currentProductId = null;
 let currentProductShopId = null;
 window.currentProductShopId = null;
