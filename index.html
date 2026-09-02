@@ -506,6 +506,45 @@
     </div>
   </div>
 
+  <!-- เมนูจัดการร้าน (โชว์เฉพาะเจ้าของร้านเท่านั้น) -->
+  <div id="shop-owner-menu" class="hidden bg-gradient-to-r from-gray-800 to-gray-700 rounded-2xl p-4 mb-3 text-white flex items-center gap-3 cursor-pointer">
+    <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl"><i class="fa-solid fa-store-alt"></i></div>
+    <p class="flex-1 font-black text-lg">จัดการร้านค้าของฉัน</p>
+    <i class="fa-solid fa-chevron-right text-lg opacity-80"></i>
+  </div>
+
+  <!-- แดชบอร์ดเจ้าของร้าน -->
+  <div id="shop-owner-dashboard-view" class="page-section bg-gray-50 min-h-screen pb-10">
+    <div class="bg-gray-800 text-white p-4 flex items-center gap-3 sticky top-0 z-40">
+      <button id="btn-back-owner-dash" class="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center text-lg"><i class="fa-solid fa-arrow-left"></i></button>
+      <h2 class="text-xl font-bold">จัดการร้านค้า</h2>
+    </div>
+    <div class="flex overflow-x-auto bg-white border-b border-gray-200 sticky top-[72px] z-30">
+      <button data-owner-tab="info" class="owner-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 text-gray-800 border-b-2 border-gray-800">ข้อมูลร้าน</button>
+      <button data-owner-tab="products" class="owner-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 text-gray-400 border-b-2 border-transparent">สินค้า</button>
+      <button data-owner-tab="orders" class="owner-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 text-gray-400 border-b-2 border-transparent">ออเดอร์</button>
+      <button data-owner-tab="chats" class="owner-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 text-gray-400 border-b-2 border-transparent">แชท</button>
+    </div>
+
+    <div class="p-4">
+      <!-- แท็บข้อมูลร้าน -->
+      <div id="owner-tab-info" class="owner-tab-content space-y-3">
+        <input id="own-shop-name" type="text" class="form-input" placeholder="ชื่อร้าน">
+        <textarea id="own-shop-description" rows="3" class="form-input" placeholder="คำอธิบายร้าน"></textarea>
+        <button id="btn-save-shop-info" class="w-full bg-gray-800 text-white py-4 rounded-2xl font-black text-lg">บันทึกข้อมูลร้าน</button>
+      </div>
+
+      <!-- แท็บสินค้า -->
+      <div id="owner-tab-products" class="owner-tab-content hidden space-y-3"></div>
+
+      <!-- แท็บออเดอร์ -->
+      <div id="owner-tab-orders" class="owner-tab-content hidden space-y-3"></div>
+
+      <!-- แท็บแชท -->
+      <div id="owner-tab-chats" class="owner-tab-content hidden space-y-3"></div>
+    </div>
+  </div>
+
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>

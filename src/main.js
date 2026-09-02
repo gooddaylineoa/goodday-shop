@@ -816,6 +816,7 @@ document.getElementById('acc-tab-cart').onclick = () => { showView('cart-view');
 document.getElementById('acc-tab-account').onclick = () => { showView('account-view'); loadAccount(); };
 
 async function loadAccount() {
+  await checkShopOwnerStatus(); // 🆕 เพิ่มบรรทัดนี้บนสุด
   const userDoc = await getDoc(doc(db, 'users', currentUid));
   const data = userDoc.data();
   document.getElementById('acc-name').innerText = data.name || 'ผู้ใช้งาน';
@@ -1346,4 +1347,218 @@ document.getElementById('btn-send-chat').onclick = async () => {
 // กด Enter ส่งข้อความได้เลย ไม่ต้องกดปุ่มอย่างเดียว
 document.getElementById('chat-input').onkeypress = (e) => {
   if (e.key === 'Enter') document.getElementById('btn-send-chat').click();
+};
+
+document.getElementById('btn-chat-shop-page').onclick = () => openChatWithShop(currentShopIdViewing);
+
+// ================= สิทธิ์เจ้าของร้าน =================
+
+let myOwnedShopId = null;
+
+async function checkShopOwnerStatus() {
+  const userDoc = await getDoc(doc(db, 'users', currentUid));
+  myOwnedShopId = userDoc.data().ownerOfShopId || null;
+  document.getElementById('shop-owner-menu').classList.toggle('hidden', !myOwnedShopId);
+}
+
+document.getElementById('shop-owner-menu').onclick = () => {
+  showView('shop-owner-dashboard-view');
+  switchOwnerTab('info');
+};
+document.getElementById('btn-back-owner-dash').onclick = () => showView('account-view');
+
+document.querySelectorAll('.owner-tab').forEach(tab => {
+  tab.onclick = () => switchOwnerTab(tab.dataset.ownerTab);
+});
+
+async function switchOwnerTab(tabName) {
+  document.querySelectorAll('.owner-tab').forEach(t => {
+    t.className = 'owner-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 text-gray-400 border-b-2 border-transparent';
+  });
+  document.querySelector(`[data-owner-tab="${tabName}"]`).className =
+    'owner-tab flex-1 py-3 text-base font-bold whitespace-nowrap px-4 text-gray-800 border-b-2 border-gray-800';
+
+  document.querySelectorAll('.owner-tab-content').forEach(c => c.classList.add('hidden'));
+  document.getElementById(`owner-tab-${tabName}`).classList.remove('hidden');
+
+  if (tabName === 'info') await loadShopInfoForm();
+  else if (tabName === 'products') await loadOwnerProducts();
+  else if (tabName === 'orders') await loadOwnerOrders();
+  else if (tabName === 'chats') await loadOwnerChats();
+}
+
+// --- แท็บข้อมูลร้าน ---
+async function loadShopInfoForm() {
+  const shopDoc = await getDoc(doc(db, 'shops', myOwnedShopId));
+  const shop = shopDoc.data();
+  document.getElementById('own-shop-name').value = shop.name || '';
+  document.getElementById('own-shop-description').value = shop.description || '';
+}
+
+document.getElementById('btn-save-shop-info').onclick = async () => {
+  showLoading('กำลังบันทึกข้อมูลร้าน...');
+  try {
+    await updateDoc(doc(db, 'shops', myOwnedShopId), {
+      name: document.getElementById('own-shop-name').value.trim(),
+      description: document.getElementById('own-shop-description').value.trim()
+    });
+    showToast('บันทึกข้อมูลร้านสำเร็จ!', 'success');
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+  } finally {
+    hideLoading();
+  }
+};
+
+// --- แท็บสินค้า: แก้ราคา/สต็อก/สินค้าแนะนำ ---
+async function loadOwnerProducts() {
+  const container = document.getElementById('owner-tab-products');
+  container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">กำลังโหลด...</p>';
+
+  const snap = await getDocs(collection(db, 'products'));
+  const myProducts = [];
+  snap.forEach(d => { if (d.data().shopId === myOwnedShopId) myProducts.push({ id: d.id, ...d.data() }); });
+
+  if (myProducts.length === 0) {
+    container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">ยังไม่มีสินค้าในร้าน</p>';
+    return;
+  }
+
+  container.innerHTML = myProducts.map(p => `
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+      <h4 class="font-black text-gray-800 text-lg mb-2">${p.name}</h4>
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <div>
+          <label class="text-sm font-bold text-gray-400">ราคา (บาท)</label>
+          <input type="number" class="form-input owner-price-input" data-pid="${p.id}" value="${p.price}">
+        </div>
+        <div>
+          <label class="text-sm font-bold text-gray-400">สต็อก (ชิ้น)</label>
+          <input type="number" class="form-input owner-stock-input" data-pid="${p.id}" value="${p.stock}">
+        </div>
+      </div>
+      <label class="flex items-center gap-2 mb-3 cursor-pointer">
+        <input type="checkbox" class="owner-featured-checkbox w-5 h-5" data-pid="${p.id}" ${p.isFeatured ? 'checked' : ''}>
+        <span class="text-base font-bold text-gray-600">ตั้งเป็นสินค้าแนะนำ</span>
+      </label>
+      <button class="btn-save-product w-full bg-gray-800 text-white py-3 rounded-xl font-black text-base" data-pid="${p.id}">บันทึก</button>
+    </div>
+  `).join('');
+
+  document.querySelectorAll('.btn-save-product').forEach(btn => {
+    btn.onclick = async () => {
+      const pid = btn.dataset.pid;
+      const price = Number(document.querySelector(`.owner-price-input[data-pid="${pid}"]`).value);
+      const stock = Number(document.querySelector(`.owner-stock-input[data-pid="${pid}"]`).value);
+      const isFeatured = document.querySelector(`.owner-featured-checkbox[data-pid="${pid}"]`).checked;
+
+      showLoading('กำลังบันทึกสินค้า...');
+      try {
+        await updateDoc(doc(db, 'products', pid), { price, stock, isFeatured });
+        showToast('บันทึกสินค้าสำเร็จ!', 'success');
+      } catch (err) {
+        showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+      } finally {
+        hideLoading();
+      }
+    };
+  });
+}
+
+// --- แท็บออเดอร์: อัปเดตสถานะ ---
+const ownerOrderStatusOptions = ['pending_verify', 'preparing', 'shipping', 'completed'];
+
+async function loadOwnerOrders() {
+  const container = document.getElementById('owner-tab-orders');
+  container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">กำลังโหลด...</p>';
+
+  const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  const myOrders = [];
+  snap.forEach(d => { if (d.data().shopId === myOwnedShopId) myOrders.push({ id: d.id, ...d.data() }); });
+
+  if (myOrders.length === 0) {
+    container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">ยังไม่มีออเดอร์</p>';
+    return;
+  }
+
+  container.innerHTML = myOrders.map(o => `
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+      <p class="text-sm text-gray-400 font-bold mb-1">คำสั่งซื้อ #${o.id.slice(0, 8)}</p>
+      ${o.items.map(it => `<p class="text-base text-gray-700">${it.name} x${it.qty}</p>`).join('')}
+      <p class="text-lg font-black theme-text mt-1 mb-3">฿${o.totalAmount.toLocaleString()}</p>
+      <select class="form-input owner-order-status-select" data-oid="${o.id}">
+        <option value="pending_payment" ${o.status === 'pending_payment' ? 'selected' : ''}>รอชำระเงิน</option>
+        ${ownerOrderStatusOptions.map(s => `<option value="${s}" ${o.status === s ? 'selected' : ''}>${orderStatusLabel[s]}</option>`).join('')}
+      </select>
+    </div>
+  `).join('');
+
+  document.querySelectorAll('.owner-order-status-select').forEach(sel => {
+    sel.onchange = async () => {
+      showLoading('กำลังอัปเดตสถานะ...');
+      try {
+        await updateDoc(doc(db, 'orders', sel.dataset.oid), { status: sel.value });
+        showToast('อัปเดตสถานะสำเร็จ!', 'success');
+      } catch (err) {
+        showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+      } finally {
+        hideLoading();
+      }
+    };
+  });
+}
+
+// --- แท็บแชท: ร้านตอบลูกค้า ---
+async function loadOwnerChats() {
+  const container = document.getElementById('owner-tab-chats');
+  container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">กำลังโหลด...</p>';
+
+  const q = query(collection(db, 'chats'), orderBy('lastMessageAt', 'desc'));
+  const snap = await getDocs(q);
+  const myChats = [];
+  snap.forEach(d => { if (d.data().shopId === myOwnedShopId) myChats.push({ id: d.id, ...d.data() }); });
+
+  if (myChats.length === 0) {
+    container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">ยังไม่มีข้อความจากลูกค้า</p>';
+    return;
+  }
+
+  container.innerHTML = myChats.map(c => `
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 cursor-pointer" onclick="openOwnerChatReply('${c.id}', '${c.buyerName}')">
+      <p class="font-black text-gray-800 text-base">${c.buyerName}</p>
+      <p class="text-base text-gray-500 truncate">${c.lastMessage || '-'}</p>
+    </div>
+  `).join('');
+}
+
+function openOwnerChatReply(chatId, buyerName) {
+  currentChatId = chatId;
+  document.getElementById('chat-shop-name').innerText = buyerName; // ฝั่งร้านเห็นชื่อลูกค้าแทน
+  showView('chat-view');
+  listenToChatMessages(chatId);
+}
+window.openOwnerChatReply = openOwnerChatReply;
+
+// --- แก้ btn-send-chat ให้รู้ว่าใครเป็นคนส่ง (ผู้ซื้อ หรือ ร้านค้า) ---
+document.getElementById('btn-send-chat').onclick = async () => {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text || !currentChatId) return;
+  input.value = '';
+
+  const isOwnerReplying = myOwnedShopId && currentChatId.endsWith(`__${myOwnedShopId}`) && document.getElementById('shop-owner-dashboard-view').classList.contains('active') === false;
+
+  try {
+    await addDoc(collection(db, 'chats', currentChatId, 'messages'), {
+      senderUid: currentUid,
+      senderRole: isOwnerReplying ? 'shop' : 'buyer',
+      text,
+      createdAt: serverTimestamp()
+    });
+    await updateDoc(doc(db, 'chats', currentChatId), { lastMessage: text, lastMessageAt: serverTimestamp() });
+  } catch (err) {
+    showToast('ส่งข้อความไม่สำเร็จ: ' + err.message, 'error');
+    input.value = text;
+  }
 };
