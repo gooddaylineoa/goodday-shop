@@ -120,30 +120,19 @@
               <p class="text-base text-amber-500 font-bold"><i class="fa-solid fa-star"></i> <span id="shop-rating">0.0</span> · <span id="shop-followers">0</span> ผู้ติดตาม</p>
             </div>
           </div>
-         <div class="px-4 -mt-10 relative">
-          <div class="bg-white rounded-2xl shadow-md p-4">
-            <div class="flex items-center gap-3 mb-2">
-              <div class="w-16 h-16 rounded-full bg-pink-100 flex items-center justify-center text-3xl theme-text shrink-0">
-                <i class="fa-solid fa-shop"></i>
-              </div>
-              <div class="flex-1">
-                <h2 id="shop-name" class="text-xl font-black text-gray-800">-</h2>
-                <p class="text-base text-amber-500 font-bold"><i class="fa-solid fa-star"></i> <span id="shop-rating">0.0</span> · <span id="shop-followers">0</span> ผู้ติดตาม</p>
-              </div>
-            </div>
-            <p id="shop-description" class="text-base text-gray-500 mb-3"></p>
-            <div class="flex gap-2">
-              <button id="btn-follow-shop" class="flex-1 border-2 border-pink-500 theme-text py-2.5 rounded-xl font-black text-base">+ ติดตาม</button>
-              <button id="btn-chat-shop-page" class="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-xl font-black text-base"><i class="fa-solid fa-message mr-1"></i> แชท</button>
-            </div>
+          <p id="shop-description" class="text-base text-gray-500 mb-3"></p>
+          <div class="flex gap-2">
+            <button id="btn-follow-shop" class="flex-1 border-2 border-pink-500 theme-text py-2.5 rounded-xl font-black text-base">+ ติดตาม</button>
+            <button id="btn-chat-shop-page" class="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-xl font-black text-base"><i class="fa-solid fa-message mr-1"></i> แชท</button>
           </div>
         </div>
-
-        <div id="shop-featured-section" class="hidden p-4 pb-0">
-          <h3 class="text-lg font-black text-gray-800 mb-3"><i class="fa-solid fa-fire text-amber-500 mr-1"></i>สินค้าแนะนำประจำร้าน</h3>
-          <div id="shop-featured-grid" class="flex overflow-x-auto gap-3 pb-2 -mx-4 px-4 mb-2"></div>
-        </div>
       </div>
+
+      <div id="shop-featured-section" class="hidden p-4 pb-0">
+        <h3 class="text-lg font-black text-gray-800 mb-3"><i class="fa-solid fa-fire text-amber-500 mr-1"></i>สินค้าแนะนำประจำร้าน</h3>
+        <div id="shop-featured-grid" class="flex overflow-x-auto gap-3 pb-2 -mx-4 px-4 mb-2"></div>
+      </div>
+
       <div class="p-4">
         <h3 class="text-lg font-black text-gray-800 mb-3">สินค้าทั้งหมดในร้าน</h3>
         <div id="shop-product-grid" class="grid grid-cols-2 gap-3"></div>
@@ -362,6 +351,13 @@
       </div>
     </div>
 
+    <!-- เมนูจัดการร้าน (โชว์เฉพาะเจ้าของร้านเท่านั้น) -->
+    <div id="shop-owner-menu" class="hidden bg-gradient-to-r from-gray-800 to-gray-700 rounded-2xl p-4 mb-3 text-white flex items-center gap-3 cursor-pointer">
+      <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl"><i class="fa-solid fa-store-alt"></i></div>
+      <p class="flex-1 font-black text-lg">จัดการร้านค้าของฉัน</p>
+      <i class="fa-solid fa-chevron-right text-lg opacity-80"></i>
+    </div>
+
     <div onclick="openOrderStatus()" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-3 flex items-center gap-3 cursor-pointer">
       <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-xl text-blue-500"><i class="fa-solid fa-box"></i></div>
       <p class="flex-1 font-black text-gray-800 text-lg">ติดตามสถานะสินค้า</p>
@@ -504,13 +500,6 @@
         <i class="fa-solid fa-paper-plane"></i>
       </button>
     </div>
-  </div>
-
-  <!-- เมนูจัดการร้าน (โชว์เฉพาะเจ้าของร้านเท่านั้น) -->
-  <div id="shop-owner-menu" class="hidden bg-gradient-to-r from-gray-800 to-gray-700 rounded-2xl p-4 mb-3 text-white flex items-center gap-3 cursor-pointer">
-    <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl"><i class="fa-solid fa-store-alt"></i></div>
-    <p class="flex-1 font-black text-lg">จัดการร้านค้าของฉัน</p>
-    <i class="fa-solid fa-chevron-right text-lg opacity-80"></i>
   </div>
 
   <!-- แดชบอร์ดเจ้าของร้าน -->
