@@ -146,9 +146,9 @@
         <h2 class="text-xl font-bold">รายละเอียดสินค้า</h2>
       </div>
 
-      <div class="w-full aspect-square bg-gradient-to-br from-pink-50 to-rose-100 flex items-center justify-center text-7xl text-pink-300">
-        <i class="fa-solid fa-box-open"></i>
-      </div>
+      <div id="pd-image-container" class="w-full aspect-square bg-gradient-to-br from-pink-50 to-rose-100 flex items-center justify-center text-7xl text-pink-300">
+      <i class="fa-solid fa-box-open"></i>
+    </div>
 
       <div class="p-4">
         <div class="flex justify-between items-start mb-2">
@@ -365,7 +365,7 @@
     </div>
 
     <div class="grid grid-cols-2 gap-3 mb-4">
-      <div onclick="showToast('ร้านค้าที่ติดตาม จะทำในเฟสถัดไป', 'info')" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-center cursor-pointer">
+      <div onclick="openFollowedShopsView()" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-center cursor-pointer">
         <i class="fa-solid fa-shop text-2xl text-pink-400 mb-2"></i>
         <p class="font-bold text-gray-700 text-base">ร้านค้าที่ติดตาม</p>
       </div>
@@ -461,6 +461,17 @@
     </div>
     <div class="p-4">
       <div id="liked-products-grid" class="grid grid-cols-2 gap-3"></div>
+    </div>
+  </div>
+
+  <!-- ร้านค้าที่ติดตาม -->
+  <div id="followed-shops-view" class="page-section bg-gray-50 min-h-screen pb-10">
+    <div class="theme-pink text-white p-4 flex items-center gap-3 sticky top-0 z-40">
+      <button id="btn-back-followed-shops" class="w-11 h-11 bg-white/20 rounded-full flex items-center justify-center text-lg"><i class="fa-solid fa-arrow-left"></i></button>
+      <h2 class="text-xl font-bold">ร้านค้าที่ติดตาม</h2>
+    </div>
+    <div class="p-4">
+      <div id="followed-shops-list" class="space-y-3"></div>
     </div>
   </div>
 
