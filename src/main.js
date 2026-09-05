@@ -125,6 +125,22 @@ function shuffleArray(arr) {
   return a;
 }
 
+// 🆕 ฟังก์ชันกลาง: สร้าง HTML รูปสินค้า (โชว์รูปจริงถ้ามี ไม่มีก็ fallback เป็นไอคอนกล่อง)
+function productImageHtml(imageUrl, sizeClass = 'aspect-square') {
+  if (imageUrl) {
+    return `<div class="w-full ${sizeClass} bg-gray-100 overflow-hidden"><img src="${imageUrl}" class="w-full h-full object-cover"></div>`;
+  }
+  return `<div class="w-full ${sizeClass} bg-gradient-to-br from-pink-50 to-rose-100 flex items-center justify-center text-4xl text-pink-300"><i class="fa-solid fa-box-open"></i></div>`;
+}
+
+// 🆕 ฟังก์ชันกลาง: สร้าง HTML โลโก้ร้านค้าวงกลม
+function shopLogoHtml(logoUrl, sizeClass = 'w-16 h-16') {
+  if (logoUrl) {
+    return `<div class="${sizeClass} rounded-full bg-pink-100 overflow-hidden shrink-0"><img src="${logoUrl}" class="w-full h-full object-cover"></div>`;
+  }
+  return `<div class="${sizeClass} rounded-full bg-pink-100 flex items-center justify-center text-3xl theme-text shrink-0"><i class="fa-solid fa-shop"></i></div>`;
+}
+
 async function loadProducts() {
   const shopsSnap = await getDocs(collection(db, 'shops'));
   allShopsData = {};
@@ -157,9 +173,7 @@ function renderProductGrid(products) {
     const shop = allShopsData[p.shopId] || {};
     return `
       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer" onclick="openProductDetail('${p.id}')">
-        <div class="w-full aspect-square bg-gradient-to-br from-pink-50 to-rose-100 flex items-center justify-center text-4xl text-pink-300">
-          <i class="fa-solid fa-box-open"></i>
-        </div>
+        ${productImageHtml(p.imageUrl)}
         <div class="p-3">
           <h4 class="font-bold text-gray-800 text-base leading-tight mb-1 line-clamp-2">${p.name}</h4>
           <p class="text-lg font-black theme-text mb-1">฿${(p.price || 0).toLocaleString()}</p>
@@ -181,9 +195,7 @@ function openShopPage(shopId) {
   const shopProducts = allProductsData.filter(p => p.shopId === shopId);
   document.getElementById('shop-product-grid').innerHTML = shopProducts.map(p => `
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div class="w-full aspect-square bg-gradient-to-br from-pink-50 to-rose-100 flex items-center justify-center text-4xl text-pink-300">
-        <i class="fa-solid fa-box-open"></i>
-      </div>
+      ${productImageHtml(p.imageUrl)}
       <div class="p-3">
         <h4 class="font-bold text-gray-800 text-base leading-tight mb-1 line-clamp-2">${p.name}</h4>
         <p class="text-lg font-black theme-text">฿${(p.price || 0).toLocaleString()}</p>
@@ -198,9 +210,6 @@ window.openShopPage = openShopPage;
 
 document.getElementById('btn-back-shop').onclick = () => showView('home-view');
 document.getElementById('tab-home').onclick = () => showView('home-view');
-document.getElementById('tab-cart').onclick = () => showToast('หน้าตะกร้า จะทำในเฟสถัดไป', 'info');
-document.getElementById('tab-account').onclick = () => showToast('หน้าบัญชี จะทำในเฟสถัดไป', 'info');
-document.getElementById('btn-notif-bell').onclick = () => showToast('ระบบแจ้งเตือน จะทำในเฟสถัดไป', 'info');
 
 function fillProvinceSelect(selectEl) {
   const provinces = ["กรุงเทพมหานคร","นครปฐม","นนทบุรี","ปทุมธานี","สมุทรปราการ","ชลบุรี","เชียงใหม่","ขอนแก่น"];
@@ -240,7 +249,14 @@ function openProductDetail(productId) {
   document.getElementById('pd-description').innerText = p.description || '';
   document.getElementById('pd-qty').innerText = '1';
 
-  // ตัวเลือกสี/ไซส์ (ถ้ามี)
+  // 🆕 โชว์รูปสินค้าจริงในหน้ารายละเอียด
+  const imgContainer = document.getElementById('pd-image-container');
+  if (imgContainer) {
+    imgContainer.innerHTML = p.imageUrl
+      ? `<img src="${p.imageUrl}" class="w-full h-full object-cover">`
+      : `<div class="w-full h-full flex items-center justify-center text-7xl text-pink-300"><i class="fa-solid fa-box-open"></i></div>`;
+  }
+
   const variantSection = document.getElementById('pd-variant-section');
   if (p.variants && p.variants.length > 0) {
     variantSection.classList.remove('hidden');
@@ -258,7 +274,6 @@ function openProductDetail(productId) {
     variantSection.classList.add('hidden');
   }
 
-  // คำนวณวันจัดส่งโดยประมาณ (สั่งวันนี้ → ได้รับภายใน 3-5 วัน)
   const today = new Date();
   const minDate = new Date(today); minDate.setDate(today.getDate() + 3);
   const maxDate = new Date(today); maxDate.setDate(today.getDate() + 5);
@@ -266,7 +281,6 @@ function openProductDetail(productId) {
   const fmt = (d) => `${d.getDate()} ${thaiMonths[d.getMonth()]}`;
   document.getElementById('pd-delivery-estimate').innerText = `สั่งวันนี้ ได้รับภายใน ${fmt(minDate)} - ${fmt(maxDate)} ${maxDate.getFullYear() + 543}`;
 
-  // สถานะถูกใจ
   const likeBtn = document.getElementById('btn-like-product');
   const isLiked = productLikedIds.has(productId);
   likeBtn.innerHTML = isLiked ? '<i class="fa-solid fa-heart"></i>' : '<i class="fa-regular fa-heart"></i>';
@@ -288,7 +302,6 @@ document.getElementById('pd-qty-plus').onclick = () => {
   else showToast('จำนวนสินค้าไม่พอ', 'error');
 };
 
-// --- ถูกใจสินค้า ---
 document.getElementById('btn-like-product').onclick = async () => {
   const likeRef = doc(db, 'users', currentUid, 'likedProducts', currentProductId);
   const isLiked = productLikedIds.has(currentProductId);
@@ -302,7 +315,7 @@ document.getElementById('btn-like-product').onclick = async () => {
       await setDoc(likeRef, { productId: currentProductId, likedAt: serverTimestamp() });
       productLikedIds.add(currentProductId);
     }
-    openProductDetail(currentProductId); // รีเฟรชไอคอนหัวใจ
+    openProductDetail(currentProductId);
   } catch (err) {
     showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
   } finally {
@@ -310,7 +323,6 @@ document.getElementById('btn-like-product').onclick = async () => {
   }
 };
 
-// --- เพิ่มลงตะกร้า (เก็บถาวรใน Firestore) ---
 document.getElementById('btn-add-cart').onclick = async () => {
   const p = allProductsData.find(x => x.id === currentProductId);
   if (p.variants && p.variants.length > 0 && !selectedVariant) {
@@ -338,17 +350,34 @@ document.getElementById('btn-add-cart').onclick = async () => {
   }
 };
 
-// --- ซื้อเลย (ไปหน้า checkout แยก จะทำในเฟสถัดไป) ---
-document.getElementById('btn-buy-now').onclick = () => {
+document.getElementById('btn-buy-now').onclick = async () => {
   const p = allProductsData.find(x => x.id === currentProductId);
   if (p.variants && p.variants.length > 0 && !selectedVariant) {
     showToast('กรุณาเลือกตัวเลือกสินค้าก่อน', 'error');
     return;
   }
-  showToast('หน้าสั่งซื้อสินค้า จะทำในเฟสถัดไป', 'info');
+
+  showLoading('กำลังเพิ่มลงตะกร้า...');
+  try {
+    const cartRef = await addDoc(collection(db, 'users', currentUid, 'cart'), {
+      productId: currentProductId,
+      shopId: currentProductShopId,
+      name: p.name,
+      price: p.price,
+      variant: selectedVariant || null,
+      qty: selectedQty,
+      addedAt: serverTimestamp()
+    });
+    await loadCart();
+    selectedCartItemIds = new Set([cartRef.id]);
+    hideLoading();
+    await openCheckout();
+  } catch (err) {
+    hideLoading();
+    showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+  }
 };
 
-// --- นับจำนวนสินค้าในตะกร้า โชว์เป็น badge ที่แท็บล่าง ---
 async function updateCartBadge() {
   const cartSnap = await getDocs(collection(db, 'users', currentUid, 'cart'));
   const badge = document.getElementById('cart-badge');
@@ -362,7 +391,6 @@ async function updateCartBadge() {
   }
 }
 
-// --- รีวิวสินค้า ---
 async function loadProductReviews(productId) {
   const container = document.getElementById('pd-reviews-list');
   container.innerHTML = '<p class="text-center text-gray-400 text-base py-4">กำลังโหลดรีวิว...</p>';
@@ -385,7 +413,6 @@ async function loadProductReviews(productId) {
   `).join('');
 }
 
-// --- โหลดรายการถูกใจตอน login ---
 async function loadLikedProducts() {
   const snap = await getDocs(collection(db, 'users', currentUid, 'likedProducts'));
   productLikedIds = new Set();
@@ -411,9 +438,8 @@ async function loadCart() {
   allCartItems = [];
   snap.forEach(d => allCartItems.push({ id: d.id, ...d.data() }));
 
-  selectedCartItemIds = new Set();
-
   if (allCartItems.length === 0) {
+    selectedCartItemIds = new Set();
     container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">ตะกร้าว่างเปล่า</p>';
     updateCartSummary();
     return;
@@ -423,9 +449,9 @@ async function loadCart() {
     const shop = allShopsData[item.shopId] || {};
     return `
       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 flex items-center gap-3">
-        <input type="checkbox" class="cart-item-checkbox w-6 h-6" data-item-id="${item.id}">
-        <div class="w-16 h-16 bg-gradient-to-br from-pink-50 to-rose-100 rounded-xl flex items-center justify-center text-2xl text-pink-300 shrink-0">
-          <i class="fa-solid fa-box-open"></i>
+        <input type="checkbox" class="cart-item-checkbox w-6 h-6" data-item-id="${item.id}" ${selectedCartItemIds.has(item.id) ? 'checked' : ''}>
+        <div class="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-gray-100">
+          ${item.imageUrl ? `<img src="${item.imageUrl}" class="w-full h-full object-cover">` : `<div class="w-full h-full bg-gradient-to-br from-pink-50 to-rose-100 flex items-center justify-center text-2xl text-pink-300"><i class="fa-solid fa-box-open"></i></div>`}
         </div>
         <div class="flex-1 min-w-0">
           <h4 class="font-bold text-gray-800 text-base leading-tight truncate">${item.name}</h4>
@@ -482,13 +508,11 @@ async function openCheckout() {
     </div>
   `).join('');
 
-  // โหลดที่อยู่
   const addrSnap = await getDocs(collection(db, 'users', currentUid, 'addresses'));
   userAddresses = [];
   addrSnap.forEach(d => userAddresses.push({ id: d.id, ...d.data() }));
   renderAddressSelector();
 
-  // เช็คสิทธิ์คูปองคงเหลือ
   const userSnap = await getDoc(doc(db, 'users', currentUid));
   const userData = userSnap.data();
   const wasteLogsSnap = await getDocs(collection(db, 'users', currentUid, 'wasteLogs'));
@@ -602,11 +626,8 @@ document.getElementById('btn-confirm-order').onclick = async () => {
       return;
     }
 
-    showToast('สร้างคำสั่งซื้อสำเร็จ! กำลังไปหน้าชำระเงิน', 'success');
-    showView('home-view');
-    await loadProducts();
     await updateCartBadge();
-    // 🔜 เฟส 4 จะพาไปหน้าชำระเงิน (QR+สลิป) จริงตรงนี้แทน
+    await openPaymentView(data.orderIds[0]);
   } catch (err) {
     hideLoading();
     showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
@@ -615,11 +636,10 @@ document.getElementById('btn-confirm-order').onclick = async () => {
 
 // ================= หน้าชำระเงิน (QR PromptPay + สลิป) =================
 
-// อัลกอริทึมสร้าง PromptPay QR Payload (มาตรฐาน EMV QR) — คำนวณเองไม่ต้องพึ่ง API เสียเงิน
 function formatPromptPayTarget(id) {
   id = id.replace(/[^0-9]/g, '');
-  if (id.length === 13) return id; // เลขบัตร ปชช.
-  if (id.length === 10 && id.startsWith('0')) return '66' + id.substring(1); // เบอร์โทร
+  if (id.length === 13) return id;
+  if (id.length === 10 && id.startsWith('0')) return '66' + id.substring(1);
   return id;
 }
 
@@ -682,7 +702,6 @@ async function openPaymentView(orderId) {
     document.getElementById('payment-qr-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(payload)}`;
   }
 
-  // นับถอยหลัง 24 ชม.
   if (paymentCountdownInterval) clearInterval(paymentCountdownInterval);
   const deadline = order.slipDeadline.toDate ? order.slipDeadline.toDate() : new Date(order.slipDeadline);
   paymentCountdownInterval = setInterval(() => {
@@ -802,7 +821,8 @@ document.getElementById('btn-pending-go-home').onclick = async () => {
   await loadProducts();
 };
 document.getElementById('btn-pending-go-status').onclick = () => {
-  showToast('หน้าติดตามสถานะสินค้า จะทำในเฟสถัดไป', 'info');
+  showView('order-status-view');
+  loadMyOrders();
 };
 
 // ================= บัญชีของฉัน =================
@@ -813,7 +833,7 @@ document.getElementById('acc-tab-cart').onclick = () => { showView('cart-view');
 document.getElementById('acc-tab-account').onclick = () => { showView('account-view'); loadAccount(); };
 
 async function loadAccount() {
-  await checkShopOwnerStatus(); // 🆕 เพิ่มบรรทัดนี้บนสุด
+  await checkShopOwnerStatus();
   const userDoc = await getDoc(doc(db, 'users', currentUid));
   const data = userDoc.data();
   document.getElementById('acc-name').innerText = data.name || 'ผู้ใช้งาน';
@@ -835,7 +855,6 @@ async function loadAccount() {
   }
 }
 
-// --- สินค้าที่ถูกใจ ---
 async function openLikedProductsView() {
   await loadLikedProducts();
   const liked = allProductsData.filter(p => productLikedIds.has(p.id));
@@ -848,9 +867,7 @@ async function openLikedProductsView() {
       const shop = allShopsData[p.shopId] || {};
       return `
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer" onclick="openProductDetail('${p.id}')">
-          <div class="w-full aspect-square bg-gradient-to-br from-pink-50 to-rose-100 flex items-center justify-center text-4xl text-pink-300">
-            <i class="fa-solid fa-box-open"></i>
-          </div>
+          ${productImageHtml(p.imageUrl)}
           <div class="p-3">
             <h4 class="font-bold text-gray-800 text-base leading-tight mb-1 line-clamp-2">${p.name}</h4>
             <p class="text-lg font-black theme-text mb-1">฿${(p.price || 0).toLocaleString()}</p>
@@ -863,6 +880,43 @@ async function openLikedProductsView() {
 }
 window.openLikedProductsView = openLikedProductsView;
 document.getElementById('btn-back-liked').onclick = () => showView('account-view');
+
+// ================= ร้านค้าที่ติดตาม (🆕 ฟีเจอร์ที่หายไป) =================
+
+async function openFollowedShopsView() {
+  const container = document.getElementById('followed-shops-list');
+  container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">กำลังโหลด...</p>';
+  showView('followed-shops-view');
+
+  await loadFollowedShops();
+
+  if (Object.keys(allShopsData).length === 0) {
+    const shopsSnap = await getDocs(collection(db, 'shops'));
+    shopsSnap.forEach(d => allShopsData[d.id] = { id: d.id, ...d.data() });
+  }
+
+  const followedShops = Array.from(followedShopIds).map(id => allShopsData[id]).filter(s => s);
+
+  if (followedShops.length === 0) {
+    container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">ยังไม่ได้ติดตามร้านค้าไหนเลย</p>';
+    return;
+  }
+
+  container.innerHTML = followedShops.map(s => `
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center gap-4 cursor-pointer" onclick="openShopPage('${s.id}')">
+      ${shopLogoHtml(s.logoUrl, 'w-14 h-14')}
+      <div class="flex-1">
+        <h4 class="font-black text-gray-800 text-lg">${s.name}</h4>
+        <p class="text-base text-gray-400 truncate">${s.description || ''}</p>
+        <p class="text-sm text-amber-500 font-bold mt-1"><i class="fa-solid fa-star"></i> ${(s.rating || 0).toFixed(1)} · ${s.followerCount || 0} ผู้ติดตาม</p>
+      </div>
+      <i class="fa-solid fa-chevron-right text-gray-300"></i>
+    </div>
+  `).join('');
+}
+window.openFollowedShopsView = openFollowedShopsView;
+
+document.getElementById('btn-back-followed-shops').onclick = () => showView('account-view');
 
 // ================= ติดตามสถานะสินค้า =================
 
@@ -1053,7 +1107,6 @@ document.getElementById('btn-submit-review').onclick = async () => {
   }
 };
 
-// --- สั่งซื้อสินค้าอีกครั้ง ---
 document.getElementById('btn-order-buy-again').onclick = async () => {
   showLoading('กำลังเพิ่มลงตะกร้า...');
   try {
@@ -1095,10 +1148,10 @@ function updateFollowButton(shopId) {
   const isFollowed = followedShopIds.has(shopId);
   if (isFollowed) {
     btn.innerText = '✓ กำลังติดตาม';
-    btn.className = 'w-full bg-gray-100 text-gray-600 py-2.5 rounded-xl font-black text-base';
+    btn.className = 'flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl font-black text-base';
   } else {
     btn.innerText = '+ ติดตาม';
-    btn.className = 'w-full border-2 border-pink-500 theme-text py-2.5 rounded-xl font-black text-base';
+    btn.className = 'flex-1 border-2 border-pink-500 theme-text py-2.5 rounded-xl font-black text-base';
   }
 }
 
@@ -1128,7 +1181,6 @@ document.getElementById('btn-follow-shop').onclick = async () => {
   }
 };
 
-// แก้ openShopPage เดิม เพิ่มส่วนสินค้าแนะนำ + ปุ่มติดตาม
 const originalOpenShopPage = openShopPage;
 window.openShopPage = function(shopId) {
   currentShopIdViewing = shopId;
@@ -1143,8 +1195,8 @@ window.openShopPage = function(shopId) {
     featuredSection.classList.remove('hidden');
     document.getElementById('shop-featured-grid').innerHTML = featured.map(p => `
       <div class="min-w-[160px] w-[160px] bg-white rounded-2xl shadow-sm border-2 border-amber-200 overflow-hidden shrink-0 cursor-pointer" onclick="openProductDetail('${p.id}')">
-        <div class="w-full aspect-square bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center text-3xl text-amber-300 relative">
-          <i class="fa-solid fa-box-open"></i>
+        <div class="w-full aspect-square relative">
+          ${p.imageUrl ? `<img src="${p.imageUrl}" class="w-full h-full object-cover">` : `<div class="w-full h-full bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center text-3xl text-amber-300"><i class="fa-solid fa-box-open"></i></div>`}
           <span class="absolute top-2 left-2 bg-amber-400 text-white text-xs font-black px-2 py-0.5 rounded-full">แนะนำ</span>
         </div>
         <div class="p-3">
@@ -1250,10 +1302,10 @@ async function updateNotifBadge() {
 // ================= แชทผู้ซื้อ-ร้านค้า =================
 
 let currentChatId = null;
-let chatUnsubscribe = null; // เก็บ listener ไว้เพื่อยกเลิกตอนออกจากหน้าแชท
+let chatUnsubscribe = null;
 
 function getChatId(buyerUid, shopId) {
-  return `${buyerUid}__${shopId}`; // deterministic ID ป้องกันสร้างแชทซ้ำ
+  return `${buyerUid}__${shopId}`;
 }
 
 async function openChatWithShop(shopId) {
@@ -1267,7 +1319,6 @@ async function openChatWithShop(shopId) {
   const chatDoc = await getDoc(chatRef);
 
   if (!chatDoc.exists()) {
-    // สร้างห้องแชทใหม่ครั้งแรกที่คุยกับร้านนี้
     const userDoc = await getDoc(doc(db, 'users', currentUid));
     await setDoc(chatRef, {
       buyerUid: currentUid,
@@ -1285,7 +1336,7 @@ async function openChatWithShop(shopId) {
 window.openChatWithShop = openChatWithShop;
 
 function listenToChatMessages(chatId) {
-  if (chatUnsubscribe) chatUnsubscribe(); // ยกเลิก listener เก่าก่อน กันซ้อนกัน
+  if (chatUnsubscribe) chatUnsubscribe();
 
   const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('createdAt', 'asc'));
   chatUnsubscribe = onSnapshot(q, (snap) => {
@@ -1306,7 +1357,6 @@ function listenToChatMessages(chatId) {
         </div>`;
     }).join('');
 
-    // เลื่อนไปข้อความล่าสุดเสมอ
     container.scrollTop = container.scrollHeight;
   });
 }
@@ -1320,28 +1370,24 @@ document.getElementById('btn-send-chat').onclick = async () => {
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
   if (!text || !currentChatId) return;
-
   input.value = '';
+
+  const isOwnerReplying = myOwnedShopId && currentChatId.endsWith(`__${myOwnedShopId}`) && !document.getElementById('shop-owner-dashboard-view').classList.contains('active');
 
   try {
     await addDoc(collection(db, 'chats', currentChatId, 'messages'), {
       senderUid: currentUid,
-      senderRole: 'buyer',
+      senderRole: isOwnerReplying ? 'shop' : 'buyer',
       text,
       createdAt: serverTimestamp()
     });
-
-    await updateDoc(doc(db, 'chats', currentChatId), {
-      lastMessage: text,
-      lastMessageAt: serverTimestamp()
-    });
+    await updateDoc(doc(db, 'chats', currentChatId), { lastMessage: text, lastMessageAt: serverTimestamp() });
   } catch (err) {
     showToast('ส่งข้อความไม่สำเร็จ: ' + err.message, 'error');
-    input.value = text; // คืนข้อความกลับให้พิมพ์ใหม่ได้
+    input.value = text;
   }
 };
 
-// กด Enter ส่งข้อความได้เลย ไม่ต้องกดปุ่มอย่างเดียว
 document.getElementById('chat-input').onkeypress = (e) => {
   if (e.key === 'Enter') document.getElementById('btn-send-chat').click();
 };
@@ -1384,7 +1430,6 @@ async function switchOwnerTab(tabName) {
   else if (tabName === 'chats') await loadOwnerChats();
 }
 
-// --- แท็บข้อมูลร้าน ---
 async function loadShopInfoForm() {
   const shopDoc = await getDoc(doc(db, 'shops', myOwnedShopId));
   const shop = shopDoc.data();
@@ -1407,7 +1452,6 @@ document.getElementById('btn-save-shop-info').onclick = async () => {
   }
 };
 
-// --- แท็บสินค้า: แก้ราคา/สต็อก/สินค้าแนะนำ ---
 async function loadOwnerProducts() {
   const container = document.getElementById('owner-tab-products');
   container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">กำลังโหลด...</p>';
@@ -1462,7 +1506,6 @@ async function loadOwnerProducts() {
   });
 }
 
-// --- แท็บออเดอร์: อัปเดตสถานะ ---
 const ownerOrderStatusOptions = ['pending_verify', 'preparing', 'shipping', 'completed'];
 
 async function loadOwnerOrders() {
@@ -1506,7 +1549,6 @@ async function loadOwnerOrders() {
   });
 }
 
-// --- แท็บแชท: ร้านตอบลูกค้า ---
 async function loadOwnerChats() {
   const container = document.getElementById('owner-tab-chats');
   container.innerHTML = '<p class="text-center text-gray-400 text-lg py-8">กำลังโหลด...</p>';
@@ -1531,31 +1573,8 @@ async function loadOwnerChats() {
 
 function openOwnerChatReply(chatId, buyerName) {
   currentChatId = chatId;
-  document.getElementById('chat-shop-name').innerText = buyerName; // ฝั่งร้านเห็นชื่อลูกค้าแทน
+  document.getElementById('chat-shop-name').innerText = buyerName;
   showView('chat-view');
   listenToChatMessages(chatId);
 }
 window.openOwnerChatReply = openOwnerChatReply;
-
-// --- แก้ btn-send-chat ให้รู้ว่าใครเป็นคนส่ง (ผู้ซื้อ หรือ ร้านค้า) ---
-document.getElementById('btn-send-chat').onclick = async () => {
-  const input = document.getElementById('chat-input');
-  const text = input.value.trim();
-  if (!text || !currentChatId) return;
-  input.value = '';
-
-  const isOwnerReplying = myOwnedShopId && currentChatId.endsWith(`__${myOwnedShopId}`) && document.getElementById('shop-owner-dashboard-view').classList.contains('active') === false;
-
-  try {
-    await addDoc(collection(db, 'chats', currentChatId, 'messages'), {
-      senderUid: currentUid,
-      senderRole: isOwnerReplying ? 'shop' : 'buyer',
-      text,
-      createdAt: serverTimestamp()
-    });
-    await updateDoc(doc(db, 'chats', currentChatId), { lastMessage: text, lastMessageAt: serverTimestamp() });
-  } catch (err) {
-    showToast('ส่งข้อความไม่สำเร็จ: ' + err.message, 'error');
-    input.value = text;
-  }
-};
